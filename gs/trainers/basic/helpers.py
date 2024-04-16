@@ -15,7 +15,7 @@ def densify(model: GaussianModel, optimizer: torch.optim.Adam, scene_scale: floa
     """
     gradients = model.mean_gradient_magnitude
     exceed_gradient_mask = torch.where(gradients > gradient_threshold, True, False).squeeze(1)
-    large_gaussian_mask = (torch.max(model.scaling_activation(model.scales), dim=1).values > percent_dense * scene_scale)
+    large_gaussian_mask = (torch.max(model.scales_activatoin(model.scales), dim=1).values > percent_dense * scene_scale)
     clone_mask = torch.logical_and(exceed_gradient_mask, ~large_gaussian_mask)
     clone_gaussians(model, optimizer, clone_mask)
     split_mask = torch.logical_and(exceed_gradient_mask, large_gaussian_mask)
@@ -26,9 +26,9 @@ def prune(model: GaussianModel, optimizer: torch.optim.Adam, scene_scale: float,
     """
     Prunes the Gaussian model by removing Gaussians based on opacity, screen size and world size.
     """
-    opacity_mask = model.opacity_activation(model.opacities) < opacity_threshold
+    opacity_mask = model.opacities_activation(model.opacities) < opacity_threshold
     screen_size_mask = model.max_radii2D > screen_size_threshold
-    world_size_mask = model.scaling_activation(model.scales).max(dim=1).values > world_size_threshold_multiplier * scene_scale
+    world_size_mask = model.scales_activatoin(model.scales).max(dim=1).values > world_size_threshold_multiplier * scene_scale
     final_mask = opacity_mask.squeeze(1).logical_or_(screen_size_mask.squeeze(1).logical_or_(world_size_mask))
     cull_gaussians(model, optimizer, final_mask)
 
@@ -36,7 +36,7 @@ def prune_opacity_only(model: GaussianModel, optimizer: torch.optim.Adam, opacit
     """
     Prunes the Gaussian model by removing Gaussians based on opacity only.
     """
-    opacity_mask = model.opacity_activation(model.opacities) < opacity_threshold
+    opacity_mask = model.opacities_activation(model.opacities) < opacity_threshold
     cull_gaussians(model, optimizer, opacity_mask.squeeze())
 
 def append_new_gaussians(
@@ -141,7 +141,7 @@ def split_gaussians(
     sh_coefficients_rest = model.sh_coefficients_rest[mask]
     
     # We sample from a normal distribution with a standard deviation of 80% of the original scale.
-    sds = model.scaling_activation(scales).repeat(n_samples, 1)
+    sds = model.scales_activatoin(scales).repeat(n_samples, 1)
     means = torch.zeros((sds.size(0), 3), device=device)
     samples = torch.normal(means, sds)
     p_rotations = quat_to_rot(rotations).repeat(n_samples, 1, 1)
@@ -149,8 +149,8 @@ def split_gaussians(
     # We create new Gaussians with the sampled positions. Scale is divided by 0.8 * n_samples of the original scale.
     new_positions = torch.bmm(p_rotations, samples.unsqueeze(-1)).squeeze(-1) + positions.repeat(n_samples, 1)
     new_rotations = rotations.repeat(n_samples, 1)
-    new_scales = model.scaling_inverse_activation(
-        model.scaling_activation(scales).repeat(n_samples, 1) / (0.8 * n_samples)
+    new_scales = model.scales_inverse_activatoin(
+        model.scales_activatoin(scales).repeat(n_samples, 1) / (0.8 * n_samples)
     )
     new_opacities = opacities.repeat(n_samples, 1)
     new_sh_coefficients_0 = sh_coefficients_0.repeat(n_samples, 1, 1)
@@ -196,10 +196,10 @@ def reset_opacities(model: GaussianModel, optimizer: torch.optim.Adam, opacity: 
     """
     Resets the opacities of the model to a specific value.
     """
-    new_opacities = model.opacity_inverse_activation(
+    new_opacities = model.opacities_inverse_activation(
         torch.min(
-            model.opacity_activation(model.opacities), 
-            torch.ones_like(model.opacity_activation(model.opacities)) * opacity)
+            model.opacities_activation(model.opacities), 
+            torch.ones_like(model.opacities_activation(model.opacities)) * opacity)
     )
     if torch.isnan(new_opacities).any():
         raise ValueError("NaNs in new opacities.")
