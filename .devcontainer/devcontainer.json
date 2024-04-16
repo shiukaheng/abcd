@@ -1,21 +1,23 @@
 // For format details, see https://aka.ms/devcontainer.json. For config options, see the
-// README at: https://github.com/devcontainers/templates/tree/main/src/ubuntu
+// README at: https://github.com/devcontainers/templates/tree/main/src/debian
 {
-	"name": "minGS Development Container",
-	"dockerComposeFile": "docker-compose.yml",
-	"service": "dev",
-	"workspaceFolder": "/root/workspace",
-	"postCreateCommand": "/bin/bash -c '/root/workspace/.devcontainer/post_create.sh'",
-	"postStartCommand": "/bin/bash -c '/root/workspace/.devcontainer/post_start.sh'",
-	"customizations": {
-		"vscode": {
-			"settings": {
-				"remote.autoForwardPorts": false
-			},
-			"extensions": [
-				"ms-python.python"
-			]
+	"name": "Debian",
+	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
+	"image": "mcr.microsoft.com/devcontainers/base:bullseye",
+	"features": {
+		"ghcr.io/devcontainers/features/nvidia-cuda:1": {
+			"installToolkit": true,
+			"cudaVersion": "12.2",
+			"cudnnVersion": "8.6.0.163"
+		},
+		"ghcr.io/devcontainers/features/python:1": {
+			"installTools": true,
+			"version": "os-provided"
 		}
-	}
+	},
+	"postCreateCommand": "bash .devcontainer/post_create.sh",
+	"runArgs": [
+		"--gpus",
+		"all"
+	]
 }
-
