@@ -53,12 +53,12 @@ class GaussianModel(nn.Module):
         self.viewspace_points = None
 
         # Set activation functions
-        self.scaling_activation = torch.exp
-        self.scaling_inverse_activation = torch.log
+        self.scales_activatoin = torch.exp
+        self.scales_inverse_activatoin = torch.log
         self.covariance_activation = build_covariance_from_scaling_rotation
-        self.opacity_activation = torch.sigmoid
-        self.opacity_inverse_activation = inverse_sigmoid
-        self.rotation_activation = torch.nn.functional.normalize
+        self.opacities_activation = torch.sigmoid
+        self.opacities_inverse_activation = inverse_sigmoid
+        self.rotations_activation = torch.nn.functional.normalize
 
         # Stats for densification
         # Initialize _gradient_accumulator to be of shape (N, 1) where N is the number of Gaussians
@@ -111,15 +111,15 @@ class GaussianModel(nn.Module):
         # Render Gaussians using rasterizer
         rasterizer = GaussianRasterizer(raster_settings=raster_settings)
 
-        rendered_image, self.radii = rasterizer(
+        rendered_image, self.radii, depth, alpha = rasterizer(
             means3D=self.positions,
             means2D=self.viewspace_points,
             shs=self.sh_coefficients,
-            opacities=self.opacity_activation(self.opacities),
-            scales=self.scaling_activation(self.scales),
-            rotations=self.rotation_activation(self.rotations),
+            opacities=self.opacities_activation(self.opacities),
+            scales=self.scales_activatoin(self.scales),
+            rotations=self.rotations_activation(self.rotations),
         )
-        return rendered_image
+        return rendered_image, depth, alpha
     
     def backprop_stats(self):
         """

@@ -7,7 +7,7 @@ from gs.core.GaussianModel import GaussianModel
 from gs.helpers.loss import mix_l1_ssim_loss
 from gs.helpers.scene import estimate_scene_scale
 from gs.trainers.basic.helpers import densify, get_expon_lr_func, prune, prune_opacity_only, reset_opacities
-from gs.visualization.TrainingViewer import TrainingViewer
+from gs.visualization.Viewer import Viewer
 
 def train(
         model: GaussianModel, 
