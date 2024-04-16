@@ -68,3 +68,7 @@ Devcontainers automatically recreate the development environment using Docker. I
 Install the relevant extensions, and when you open the repository you should be prompted to enter the container environment. First time running might take around 5 minutes to build the environment.
 - VSCode
 - [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
+
+# Credits
+- [3D Gaussian splatting](https://github.com/graphdeco-inria/gaussian-splatting)
+- [Modified rasterization code from ashwakey to support depth and alpha channels](https://github.com/ashawkey/diff-gaussian-rasterization)
