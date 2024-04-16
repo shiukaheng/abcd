@@ -8,10 +8,10 @@ import threading
 from gs.visualization.helpers import build_camera
 
 class TrainingViewer(Viewer):
-    def __init__(self, model: GaussianModel, width=1920, finish_frame_rate=15):
+    def __init__(self, model: GaussianModel, width=1920, finish_frame_rate=15, reuse_viser=True):
         self.training_preview_thread = None
         self.lock = threading.Lock()
-        super().__init__(model, frame_rate=finish_frame_rate, width=width, auto_start=False)
+        super().__init__(model, frame_rate=finish_frame_rate, width=width, auto_start=False, reuse_viser=reuse_viser)
 
     def render_once(self):
         """

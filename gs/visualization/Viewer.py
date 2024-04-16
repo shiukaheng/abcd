@@ -7,10 +7,25 @@ import threading
 import time
 from gs.visualization.helpers import build_camera
 
+global shared_viser
+shared_viser = {
+    "viser": None,
+    "viewer": None
+}
+
 class Viewer:
-    def __init__(self, model: GaussianModel, frame_rate=15, width=1920, auto_start=True):
+    def __init__(self, model: GaussianModel, frame_rate=15, width=1920, auto_start=True, reuse_viser=True):
         self.model = model
-        self.viser = viser.ViserServer()
+        if reuse_viser:
+            global shared_viser
+            if shared_viser["viser"] is None:
+                shared_viser["viser"] = viser.ViserServer()
+                shared_viser["viewer"] = self
+            else:
+                shared_viser["viewer"].stop(stop_viser=False)
+            self.viser = shared_viser["viser"]
+        else:
+            self.viser = viser.ViserServer()
         self.running = False
         self.frame_rate = frame_rate
         self.render_thread = threading.Thread(target=self.render_loop, daemon=True)
@@ -31,13 +46,14 @@ class Viewer:
         if not self.render_thread.is_alive():
             self.render_thread.start()
 
-    def stop(self):
+    def stop(self, stop_viser=True):
         """
         Stop the rendering loop and close the Viser server
         """
         self.running = False
         self.render_thread.join()
-        self.viser.stop()
+        if stop_viser:
+            self.viser.stop()
 
     def render_loop(self):
         """
