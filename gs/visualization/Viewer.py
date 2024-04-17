@@ -74,7 +74,7 @@ class Viewer():
             render: torch.Tensor = render.detach().cpu()
             # We need to normalize depth and convert to 3 channels for visualization
             depth: torch.Tensor = depth.detach().cpu()
-            depth = 1 - (depth / 100.).clamp(0, 1)
+            depth = 1 - (depth / 5.).clamp(0, 1)
             depth = depth.repeat(1, 3, 1, 1)
             # We need to convert alpha to 3 channels for visualization
             alpha: torch.Tensor = alpha.detach().cpu().repeat(1, 3, 1, 1)
