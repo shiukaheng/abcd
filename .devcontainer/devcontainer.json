@@ -19,5 +19,9 @@
 	"runArgs": [
 		"--gpus",
 		"all"
+	],
+	// Make pip cache persistent so we don't have to download packages every time. Mount at ./.devcontainer/.pip-cache
+	"mounts": [
+		"source=${localWorkspaceFolder}/.devcontainer/.pip-cache,target=/home/vscode/.cache/pip,type=bind,consistency=cached"
 	]
 }

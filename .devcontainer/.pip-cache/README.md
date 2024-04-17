@@ -1,0 +1,1 @@
+This file needs to exist for git to track the directory. This folder is used to store the pip cache for the devcontainer.

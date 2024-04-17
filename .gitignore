@@ -163,3 +163,10 @@ cython_debug/
 datasets/
 test.ipynb
 output/
+
+
+# Ignore everything in the .pip-cache directory
+.devcontainer/.pip-cache/*
+
+# But not the README.md file
+!.devcontainer/.pip-cache/README.md
