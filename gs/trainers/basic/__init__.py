@@ -128,4 +128,4 @@ def train(
             pbar.set_description(f"Loss: {loss.item()}") # We update the progress bar with the current loss.
             torch.cuda.empty_cache() # We empty the cache to avoid memory leaks.
 
-    viewer.start_render_loop()
+    viewer.start()
