@@ -6,7 +6,8 @@ from gs.trainers.basic import train
 cameras, pointcloud = load('./datasets/apartment/') # Replace with your dataset path
 
 # Initialize Gaussian model
-model = GaussianModel.from_point_cloud(pointcloud, constant_scale=0.1).cuda()
+
+model = GaussianModel.from_point_cloud(pointcloud, constant_scale=0.1, min_scale=0.01, max_scale=1).cuda()
 
 # Train the model
-train(model, cameras, iterations=4000, densify_until_iter=3000)
+train(model, cameras, iterations=30000, scales_lr=0.01, positions_lr_init=0.00005, positions_lr_final=0.0000005)

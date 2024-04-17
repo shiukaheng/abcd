@@ -6,7 +6,7 @@ from torch import nn
 from gs.core.BaseCamera import BaseCamera
 from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
 from gs.core.BasePointCloud import BasePointCloud
-from gs.helpers.math import inverse_sigmoid
+from gs.helpers.math import create_scaled_sigmoid, inverse_sigmoid
 from gs.helpers.spherical_harmonics import rgb_to_sh
 from gs.helpers.system import mkdir_p
 from gs.helpers.transforms import build_covariance_from_scaling_rotation
@@ -37,6 +37,8 @@ class GaussianModel(nn.Module):
         # Other parameters
         sh_degree: int=4, # Degree of spherical harmonics
         background_color: torch.Tensor=torch.tensor([0, 0, 0], dtype=torch.float32), # Background color
+        min_scale: float=0.0001, # Minimum scale for sigmoid
+        max_scale: float=0.05, # Maximum scale for sigmoid
     ):
         super().__init__()
         # Gaussian parameters defining geometry and appearance to be optimized.
@@ -52,9 +54,11 @@ class GaussianModel(nn.Module):
         background_color = background_color
         self.viewspace_points = None
 
+        scaled_sigmoid, inverse_scaled_sigmoid = create_scaled_sigmoid(min_scale, max_scale)
+
         # Set activation functions
-        self.scales_activatoin = torch.exp
-        self.scales_inverse_activatoin = torch.log
+        self.scales_activatoin = scaled_sigmoid
+        self.scales_inverse_activatoin = inverse_scaled_sigmoid
         self.covariance_activation = build_covariance_from_scaling_rotation
         self.opacities_activation = torch.sigmoid
         self.opacities_inverse_activation = inverse_sigmoid
@@ -161,7 +165,7 @@ class GaussianModel(nn.Module):
         return m
     
     @staticmethod
-    def from_point_cloud(pointcloud: BasePointCloud, sh_degree: int=3, background_color: torch.Tensor=torch.tensor([0, 0, 0], dtype=torch.float32), constant_scale: float=None):
+    def from_point_cloud(pointcloud: BasePointCloud, sh_degree: int=3, background_color: torch.Tensor=torch.tensor([0, 0, 0], dtype=torch.float32), constant_scale: float=None, min_scale: float=0.0001, max_scale: float=0.05):
         """
         Create GaussianModel from PointCloud. This is useful for converting PointClouds to GaussianModels, which can be rendered using rasterizer.
         """
@@ -175,11 +179,16 @@ class GaussianModel(nn.Module):
         sh_coefficients = sh_coefficients.transpose(1, 2)
 
         # Initialize scale
+        scale_transform, inverse_scale_transform = create_scaled_sigmoid(min_scale, max_scale)
+        constant_scale = min(max(constant_scale, min_scale), max_scale) if constant_scale is not None else None
+
         if constant_scale is not None:
-            scales = torch.log(torch.tensor([constant_scale], dtype=torch.float).repeat(positions.shape[0], 3))
+            scales = inverse_scale_transform(torch.tensor([constant_scale], dtype=torch.float).repeat(positions.shape[0], 3))
         else:
-            dist2 = torch.clamp_min(distCUDA2(torch.from_numpy(np.asarray(pointcloud.points)).float().cuda()), 0.0000001) # Calculate squared distance between points
-            scales = torch.log(torch.sqrt(dist2))[...,None].repeat(1, 3)
+            dist = torch.sqrt(torch.clamp_min(distCUDA2(torch.from_numpy(np.asarray(pointcloud.points)).float().cuda()), 0.0000001))
+            # Clamp dist with min max
+            dist = torch.clamp(dist, min_scale, max_scale)
+            scales = inverse_scale_transform(dist[...,None].repeat(1, 3))
 
         # Initialize rotation
         rotations = torch.zeros((positions.shape[0], 4), device="cuda") # Create a tensor: (N, 4) for quaternions
@@ -196,7 +205,9 @@ class GaussianModel(nn.Module):
             scales=scales,
             opacities=opacities,
             sh_degree=sh_degree,
-            background_color=background_color
+            background_color=background_color,
+            min_scale=min_scale,
+            max_scale=max_scale
         )
     
     # Convenience functions
