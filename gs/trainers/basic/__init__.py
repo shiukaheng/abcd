@@ -75,6 +75,8 @@ def train(
     # We set the active SH degree to 0. For this basic trainer, each Gaussian will just have a constant color.
     active_sh_degree = 0
 
+    out_of_memory = False
+
     pbar = tqdm(range(iterations))
     for i in pbar:
 
@@ -107,13 +109,17 @@ def train(
         with torch.no_grad():
 
             # Densification and culling
-            if densify_from_iter < i < densify_until_iter:
+            if densify_from_iter < i < densify_until_iter and not out_of_memory:
                 if i % densify_interval == 0:
-                    densify(model, optimizer, scene_scale, densify_grad_threshold)
-                    if i > opacity_reset_interval:
-                        prune(model, optimizer, scene_scale, opacity_threshold, screen_size_threshold, world_size_threshold_multiplier)
-                    else:
-                        prune_opacity_only(model, optimizer, opacity_threshold)
+                    try:
+                        densify(model, optimizer, scene_scale, densify_grad_threshold)
+                        if i > opacity_reset_interval:
+                            prune(model, optimizer, scene_scale, opacity_threshold, screen_size_threshold, world_size_threshold_multiplier)
+                        else:
+                            prune_opacity_only(model, optimizer, opacity_threshold)
+                    except torch.cuda.OutOfMemoryError:
+                        out_of_memory = True
+                        pbar.write("Out of memory, skipping densification and pruning")
 
             # Opacity reset
             if (i % opacity_reset_interval == 0) and (i > densify_from_iter):
