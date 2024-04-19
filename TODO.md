@@ -1,0 +1,1 @@
+- [ ] For non-optimization related variables, refactor to use numpy instead of tensors

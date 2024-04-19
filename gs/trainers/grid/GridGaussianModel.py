@@ -8,7 +8,7 @@ from gs.core.View import View, ViewWithRes, KnownView
 from gs.core.GaussianModel import GaussianModel
 from gs.geometry.bounding_box import BoundingBox
 from gs.geometry.grid import Grid, GridIndex
-from gs.trainers.grid.alpha_compositing import composite_images_rgbda
+from gs.compositing.alpha_compositing import composite_images_rgbda
 from gs.trainers.grid.forward_properties import forward_to_active_cell
 from gs.trainers.grid.grid_utils import cut, merge_model, split_model
 

@@ -12,7 +12,7 @@ from gs.helpers.image import torch_to_numpy
 import threading
 from gs.helpers.transforms import rotmat_to_qvec
 from gs.trainers.grid.GridGaussianModel import GridGaussianCell
-from gs.trainers.grid.alpha_compositing import fix_depth
+from gs.compositing.gaussian_rendering_fix import fix_default_blended
 from gs.visualization.helpers import build_camera
 
 global shared_viser
@@ -155,7 +155,7 @@ class Viewer(Generic[T]):
             render, depth, alpha = self.model.forward(camera)
             render = render.detach().cpu()
             # We need to normalize depth and convert to 3 channels for visualization
-            depth = fix_depth(depth, alpha)
+            depth = fix_default_blended(depth, alpha)
             depth_raw = depth.detach().cpu()
             depth = false_color_depth(depth, alpha).detach().cpu()
             # We need to convert alpha to 3 channels for visualization
