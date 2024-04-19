@@ -27,7 +27,7 @@ def train(
 
     # Split model into grid on its original device
     model.to(c.model_store_device)
-    grid_model = GridGaussianModel.from_gaussian_model(model, cameras, c.grid, c.model_store_device, c.model_train_device, min_gaussians=c.min_gaussians, default_extra_cell_compensation="last")
+    grid_model = GridGaussianModel.from_gaussian_model(model, cameras, c.grid, c.model_store_device, c.model_train_device, min_gaussians=c.min_gaussians, default_extra_cell_compensation=c.extra_cell_compensation)
 
     # We train each cell in the grid for sync_interval iterations
     while all(cell.current_iter < c.iterations for cell in grid_model.grid_iter()): # While there are cells that have not reached the target iteration
