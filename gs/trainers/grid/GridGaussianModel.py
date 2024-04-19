@@ -156,7 +156,7 @@ class GridGaussianModel(Generic[T]): # T represents the type of the camera ID
         """
         Merge the grid of Gaussian models into a single Gaussian model.
         """
-        return merge_model([(cell.model, cell.bounding_box) for cell in self.cells.values()], clean)
+        return merge_model([(cell.model, cell.bounding_box) for cell in self.cells.values()], self.model_store_device, clean)
     
     def set_active_cell_index(self, index: GridIndex):
         """
@@ -304,7 +304,7 @@ class GridGaussianModel(Generic[T]): # T represents the type of the camera ID
         # Now, this is the actual case where we composite the appearance of other cells together!
 
         # We gather all the other layers to composite as ((RGB, depth, alpha), plane_distance) tuples
-        prerendered_layers = [(cell.get_prerender(camera, requested_iteration), cell.plane_distance(camera)) for cell in in_view_cells if cell.current_iter != 0]
+        prerendered_layers = [(cell.get_prerender(camera, requested_iteration), cell.plane_distance(camera)) for cell in in_view_cells if cell.current_iter != 0 and cell.index != self._active_cell_index]
         # Move all prerendered layers to the training device
         prerendered_layers = [((rgb.to(self.model_train_device), depth.to(self.model_train_device), alpha.to(self.model_train_device)), plane_distance) for ((rgb, depth, alpha), plane_distance) in prerendered_layers]
         # We add the active cell to the layers

@@ -1,6 +1,6 @@
 import math
 import os
-from typing import Tuple, Union
+from typing import List, Tuple, Union
 import numpy as np
 import torch
 from torch import nn
@@ -262,7 +262,8 @@ class GaussianModel(nn.Module):
                 scales=new_scales,
                 opacities=new_opacities,
                 sh_degree=self.sh_degree,
-                background_color=self.background_color
+                background_color=self.background_color,
+                scales_range=self.scales_range
             )
         else:
             raise TypeError("Indexing with type {} not supported".format(type(idx)))
@@ -315,12 +316,12 @@ class GaussianModel(nn.Module):
         )
         return new_model
     
-    def concatenate(self, *models: "GaussianModel"):
+    def concatenate(self, models: List["GaussianModel"]):
         """
         Concatenates multiple GaussianModel instances into the current model.
         """
         if not all(isinstance(model, GaussianModel) for model in models):
-            raise ValueError("All items to concatenate must be instances of GaussianModel.")
+            raise ValueError(f"All items to concatenate must be instances of GaussianModel. Got: {[type(model) for model in models]}")
 
         # Check for consistent sh_degree and background_color across all models
         if len(set(model.sh_degree for model in models)) > 1:
@@ -329,12 +330,12 @@ class GaussianModel(nn.Module):
             raise ValueError("All models must have the same background color.")
 
         # Concatenate all parameters
-        concatenated_positions = torch.cat([model.positions for model in models], dim=0)
-        concatenated_sh_coefficients_0 = torch.cat([model.sh_coefficients_0 for model in models], dim=0)
-        concatenated_sh_coefficients_rest = torch.cat([model.sh_coefficients_rest for model in models], dim=0)
-        concatenated_rotations = torch.cat([model.rotations for model in models], dim=0)
-        concatenated_scales = torch.cat([model.scales for model in models], dim=0)
-        concatenated_opacities = torch.cat([model.opacities for model in models], dim=0)
+        concatenated_positions = torch.nn.Parameter(torch.cat([model.positions for model in models], dim=0))
+        concatenated_sh_coefficients_0 = torch.nn.Parameter(torch.cat([model.sh_coefficients_0 for model in models], dim=0))
+        concatenated_sh_coefficients_rest = torch.nn.Parameter(torch.cat([model.sh_coefficients_rest for model in models], dim=0))
+        concatenated_rotations = torch.nn.Parameter(torch.cat([model.rotations for model in models], dim=0))
+        concatenated_scales = torch.nn.Parameter(torch.cat([model.scales for model in models], dim=0))
+        concatenated_opacities = torch.nn.Parameter(torch.cat([model.opacities for model in models], dim=0))
         
         # Update current model with concatenated parameters
         self.positions = concatenated_positions

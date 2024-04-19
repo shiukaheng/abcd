@@ -66,8 +66,10 @@ def train(
     # Merge model from grid
     merged = grid_model.merge()
 
-    if _viewer is None:
-        viewer.start()
+    print("Training complete!")
+    print(f"Iterations per cell: {c.iterations}")
+    print(f"Total cells trained: {len(grid_model.cells)}")
+    print(f"Total Gaussians: {len(merged)}")
 
     return merged
 

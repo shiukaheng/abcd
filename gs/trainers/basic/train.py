@@ -151,5 +151,4 @@ def train(
                 max_gaussians_reached = True
                 print("Max Gaussians reached")
 
-    if _viewer is None: # If there was no chained viewer, we keep the viewer open.
-        viewer.start()
+    return model

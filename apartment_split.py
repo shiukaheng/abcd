@@ -13,18 +13,23 @@ from gs.trainers.grid.config import GridTrainConfig
 cameras, pointcloud = load('./datasets/apartment')
 
 # Create model
-input_model = GaussianModel.from_point_cloud(pointcloud, constant_scale=0.02, scales_range=(0.01, 0.05))
+input_model = GaussianModel.from_point_cloud(pointcloud, constant_scale=0.5, scales_range=(0.01, 1.0))
 
-train(
+output_model = train(
     input_model, 
     cameras, 
     GridTrainConfig(
+        iterations=20000,
+        densify_until_iter=15000,
         grid=Grid(100, 
         grid_origin=torch.Tensor([0,0,55])), 
-        sync_interval=500,
-        densify_interval=50,
+        sync_interval=1750,
+        densify_interval=100,
         scales_lr=0.01,
         extra_cell_compensation="last",
         preview_camera=cameras[11],
         min_gaussians=100,
     ))
+
+# Save model
+output_model.save_ply("./output_model.ply")
