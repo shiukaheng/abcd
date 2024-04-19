@@ -16,7 +16,7 @@ We deliberately don't want to optimize camera poses jointly with Gaussians, sinc
     - [ ] OR: Use point scale to determine normals
 - [ ] Depth and normal supervision, accounting for confidence using DUST3R (https://arxiv.org/abs/2003.10432) (GaussianPro, NOT done in InstantSplat)
 - [ ] Normal smoothing loss (GaussianPro)
-- [ ] Dense / linear layer before outputting spherical harmonic coefficients, with additional info based on camera identity, posed as embedding layer
+- [ ] Dense / linear layer before outputting spherical harmonic coefficients, with additional info based on camera identity, posed as embedding layer [CURRENT]
     - [ ] We can bake in the final spherical harmonics during export by pre-applying the linear layer, resulting in the spherical harmonics only.
 - [ ] Alpha regularization: Every pixel should have a non-zero alpha value!
 # Memory optimization
