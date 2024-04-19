@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import Union
 
+from gs.core.View import KnownView
+
 
 @dataclass
 class BasicTrainConfig:
@@ -33,3 +35,4 @@ class BasicTrainConfig:
     max_gaussians: Union[int, None] = None
     starting_iter: int = 0
     ending_iter: Union[int, None] = None
+    preview_camera: Union[KnownView, None] = None

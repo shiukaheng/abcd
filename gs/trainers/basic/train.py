@@ -5,12 +5,15 @@ from tqdm import tqdm
 from gs.core.View import KnownView
 from gs.core.GaussianModel import GaussianModel
 from gs.helpers.formatting import format_number
+from gs.helpers.image import torch_to_cv2, torch_to_numpy, torch_to_pil
 from gs.helpers.loss import mix_l1_ssim_loss
 from gs.helpers.scene import estimate_scene_scale
 from gs.helpers.training import get_expon_lr_func
 from gs.trainers.basic.config import BasicTrainConfig
 from gs.trainers.basic.dynamic_parameters import densify, prune, prune_opacity_only, reset_opacities
 from gs.visualization.Viewer import Viewer
+
+import cv2
 
 def train(
         model: GaussianModel,
@@ -98,11 +101,20 @@ def train(
         # We perform a forward pass and compute the loss.
 
         rendered, _, _ = model.forward(camera, active_sh_degree=active_sh_degree)
+
         loss = mix_l1_ssim_loss(rendered, camera.image)
 
         # We perform a backward pass and update the parameters.
         loss.backward()
         model.backprop_stats()
+
+        # Show rendered image as its training
+        if c.preview_camera is not None:
+            with torch.no_grad():
+                c.preview_camera.to(c.camera_train_device)
+                preview_render, _, _ = model.forward(c.preview_camera, active_sh_degree=active_sh_degree)
+                cv2.imshow('Rendered', torch_to_cv2(preview_render.detach().cpu()))
+                cv2.waitKey(5)
 
         if c.camera_store_device is not None:
             camera.to(c.camera_store_device)

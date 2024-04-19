@@ -243,6 +243,16 @@ class GridGaussianModel(Generic[T]): # T represents the type of the camera ID
                 if current_iter not in self.active_cell.prerenders:
                     self.active_cell.prerenders[current_iter] = {}
                 self.active_cell.prerenders[current_iter][camera.id] = (rgb, depth, alpha)
+
+    def cull_active_cell_prerenders(self, older_than: int):
+        """
+        Cull the view snapshots of the active cell that are older than the specified iteration.
+        """
+        if self._active_cell_index is None:
+            raise ValueError("No active cell is set.")
+        for iteration in list(self.active_cell.prerenders.keys()):
+            if iteration < older_than:
+                del self.active_cell.prerenders[iteration]
         
     def forward(
             self, 
@@ -264,6 +274,7 @@ class GridGaussianModel(Generic[T]): # T represents the type of the camera ID
 
         # If camera is not a KnownView, then we directly render the active cell
         if not isinstance(camera, KnownView):
+            print("Rendering active cell directly since camera is not a KnownView")
             return self.active_cell.model.forward(camera, active_sh_degree)
         
         if extra_cell_compensation is None:
@@ -293,13 +304,13 @@ class GridGaussianModel(Generic[T]): # T represents the type of the camera ID
         # Now, this is the actual case where we composite the appearance of other cells together!
 
         # We gather all the other layers to composite as ((RGB, depth, alpha), plane_distance) tuples
-        prerendered_layers = [(cell.get_prerender(camera, requested_iteration), cell.plane_distance(camera)) for cell in in_view_cells]
+        prerendered_layers = [(cell.get_prerender(camera, requested_iteration), cell.plane_distance(camera)) for cell in in_view_cells if cell.current_iter != 0]
         # Move all prerendered layers to the training device
         prerendered_layers = [((rgb.to(self.model_train_device), depth.to(self.model_train_device), alpha.to(self.model_train_device)), plane_distance) for ((rgb, depth, alpha), plane_distance) in prerendered_layers]
         # We add the active cell to the layers
         layers = prerendered_layers + [((active_rgb, active_depth, active_alpha), active_plane_distance)]
         # We sort the layers by plane distance
-        layers.sort(key=lambda x: x[1])
+        layers.sort(key=lambda x: -x[1])
         # We remove the plane distance from the layers
         layers = [layer[0] for layer in layers]
         # We composite the layers

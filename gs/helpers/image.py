@@ -24,3 +24,8 @@ def torch_to_numpy(image: torch.Tensor) -> np.ndarray:
         return image.permute(1, 2, 0).numpy()
     else: # If the image is grayscale
         return image.squeeze(dim=0).permute(1, 2, 0).numpy()
+    
+def torch_to_cv2(image: torch.Tensor) -> np.ndarray:
+    numpy = torch_to_numpy(image)
+    # Convert from RGB to BGR
+    return numpy[..., ::-1]
