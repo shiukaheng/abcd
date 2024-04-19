@@ -1,7 +1,9 @@
 import os
 from typing import List, Tuple
+import warnings
 import numpy as np
-from gs.io.colmap.COLMAPCamera import COLMAPCamera
+from tqdm import tqdm
+from gs.io.colmap.COLMAPView import COLMAPView
 from gs.helpers.image import pil_to_torch
 from gs.helpers.transforms import qvec_to_rotmat
 from gs.io.colmap.COLMAPPointCloud import COLMAPPointCloud
@@ -14,7 +16,7 @@ from gs.io.colmap.sparse_parsing import fetchPly, read_points3D_binary, read_poi
 This module contains the main functions for loading COLMAP models.
 """
 
-def load(path: str) -> Tuple[List[COLMAPCamera], COLMAPPointCloud]:
+def load(path: str) -> Tuple[List[COLMAPView], COLMAPPointCloud]:
     '''
     Loads a COLMAP model from a path, returns (List[Camera], PointCloud)
 
@@ -32,7 +34,7 @@ def load(path: str) -> Tuple[List[COLMAPCamera], COLMAPPointCloud]:
     sparse_points = load_sparse_points(path)
     return cameras, sparse_points
 
-def load_cameras(path: str) -> List[COLMAPCamera]:
+def load_cameras(path: str) -> List[COLMAPView]:
     try:
         cameras_extrinsic_file = os.path.join(path, "sparse/0", "images.bin")
         cameras_intrinsic_file = os.path.join(path, "sparse/0", "cameras.bin")
@@ -48,7 +50,8 @@ def load_cameras(path: str) -> List[COLMAPCamera]:
     images_folder = os.path.join(path, "images")
     cameras = []
 
-    for idx, key in enumerate(camera_extrinsics):
+    pbar = tqdm(camera_extrinsics, desc="Loading cameras")
+    for idx, key in enumerate(pbar):
         extrinsics = camera_extrinsics[key] # We first get the extrinsics
         intrinsics = camera_intrinsics[extrinsics.camera_id] # Then we get the intrinsics
 
@@ -57,27 +60,23 @@ def load_cameras(path: str) -> List[COLMAPCamera]:
 
         fov_x, fov_y = get_fov(intrinsics)
         image_path = os.path.join(images_folder, os.path.basename(extrinsics.name))
-        pil_image = Image.open(image_path)
+        # replace .arw with .jpg (hack)
+        image_path = image_path.replace(".arw", ".jpg")
+        with warnings.catch_warnings(): # Suppress EXIF warnings .. "Corrupt EXIF data"
+            warnings.simplefilter("ignore")
+            pil_image = Image.open(image_path)
         image = pil_to_torch(pil_image)
         
         # Point indexes = indexes of extrinsics.points3D_ids that are not -1
         point_indexes = np.where(extrinsics.point3D_ids != -1)[0]
 
         # Originally, we convert to CameraInfo, but this is so convoluted. Lets just directly convert to image
-        camera = COLMAPCamera(
-            pil_image.height,
-            pil_image.width,
-            fov_x,
-            fov_y,
-            R,
-            t,
-            image,
-            image_path,
-            idx,
-            point_indexes
+        camera = COLMAPView(
+            R, t, fov_x, fov_y, pil_image.height, pil_image.width, idx, image, image_path, point_indexes
         )
 
         cameras.append(camera)
+    pbar.close()
     return cameras
 
 def load_sparse_points(path: str) -> COLMAPPointCloud:
