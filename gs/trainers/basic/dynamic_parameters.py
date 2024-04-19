@@ -69,8 +69,10 @@ def append_new_gaussians(
         "sh_coefficients_rest": sh_coefficients_rest
     }
     for group in optimizer.param_groups:
+        if group["name"] == "sh_mlp": # We skip the SH MLP parameters as it is independent of the number of Gaussians.
+            continue
         if len(group["params"]) != 1:
-            raise ValueError("Unexpected number of parameters in optimizer group. Only one parameter is expected, as initialized in the GaussianModel.")
+            raise ValueError(f"Unexpected number of parameters in optimizer group. Only one parameter is expected, as initialized in the GaussianModel. Parameter group: {group}")
         if group["name"] not in extension_lookup:
             raise ValueError(f"Unexpected parameter name {group['name']} in optimizer group. Expected one of 'positions', 'rotations', 'scales', 'opacities', 'sh_coefficients_0', 'sh_coefficients_rest'.")
         extension_params = extension_lookup[group["name"]]
@@ -124,6 +126,8 @@ def cull_gaussians(
     # check_mask_validity(mask, model)
     keep_mask = ~mask
     for group in optimizer.param_groups:
+        if group["name"] == "sh_mlp":
+            continue
         stored_state = optimizer.state.get(group["params"][0], None)
         if stored_state is not None:
             stored_state["exp_avg"] = stored_state["exp_avg"][keep_mask]

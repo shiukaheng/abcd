@@ -168,7 +168,7 @@ class Viewer(Generic[T]):
             else:
                 self.render_channel[cid] = self.render_channel[cid]
             output[cid] = {
-                "display": torch_to_numpy(channels[self.render_channel[cid]]),
+                "display": torch_to_numpy(channels[self.render_channel[cid] or "rgb"]),
                 "depth": torch_to_numpy(depth_raw)
             } # Send the render to the client
             del camera

@@ -1,4 +1,5 @@
 import random
+import time
 from typing import List, Union
 import torch
 from tqdm import tqdm
@@ -35,6 +36,8 @@ def train(
         viewer = _viewer
     viewer.set_model(model)
 
+    time.sleep(10) # We give the viewer some time to start.
+
     # We estimate the scene size, such that a larger scene will have a larger learning rate. It is a heuristic defined in the original code.
     if c.scene_scale is None:
         scene_scale = estimate_scene_scale(cameras).item()
@@ -50,6 +53,11 @@ def train(
         {"params": [model.sh_coefficients_0], "lr": c.sh_coefficients_lr, "name": "sh_coefficients_0"},
         {"params": [model.sh_coefficients_rest], "lr": c.sh_coefficients_lr / 20.0, "name": "sh_coefficients_rest"},
     ]
+
+    if c.sh_mlp_lr is not None:
+        lr_groups += [
+            {"params": model.sh_mlp.parameters(), "lr": c.sh_mlp_lr, "name": "sh_mlp"},
+        ]
     
     # With all this set, we can define the optimizer.
     optimizer = torch.optim.Adam(lr_groups, lr=0.0, eps=1e-15)
