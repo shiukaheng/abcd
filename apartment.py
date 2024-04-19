@@ -1,6 +1,6 @@
 from gs.core.GaussianModel import GaussianModel
 from gs.io.colmap import load
-from gs.trainers.basic import train
+from gs.trainers.basic.train import train
 
 # Load COLMAP dataset
 cameras, pointcloud = load('./datasets/apartment/') # Replace with your dataset path

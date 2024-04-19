@@ -3,7 +3,7 @@ from gs.core.GaussianModel import GaussianModel
 from gs.core.View import KnownView
 from gs.trainers.grid.config import GridTrainConfig
 from gs.trainers.grid.GridGaussianModel import GridGaussianModel
-from gs.trainers.basic import train as basic_train
+from gs.trainers.basic.train import train as basic_train
 
 def train(
         model: GaussianModel, 
