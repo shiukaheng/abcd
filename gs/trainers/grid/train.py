@@ -46,8 +46,8 @@ def train(
             bounding_box_viz = viewer.add_cell_bounary(cell)
 
             # Train the cell
-            grid_model.set_active_cell_index(cell.index)
-            visible_cameras = grid_model.get_visible_cameras_from_cell(cell.index) # Get the cameras that can see the cell
+            grid_model.grid_set_active_cell_index(cell.index)
+            visible_cameras = grid_model.grid_get_visible_cameras_from_cell(cell.index) # Get the cameras that can see the cell
             basic_train(
                 grid_model,
                 visible_cameras,
@@ -61,8 +61,8 @@ def train(
             # Pre-render the cell if required
             if c.extra_cell_compensation != "disabled":
                 if c.extra_cell_compensation == "last":
-                    grid_model.cull_active_cell_prerenders(target_iteration)
-                grid_model.prerender_active_cell(target_iteration)
+                    grid_model.grid_cull_active_cell_prerenders(target_iteration)
+                grid_model.grid_prerender_active_cell(target_iteration)
 
             # Update the cell to notifiy that it has been trained
             cell.current_iter = target_iteration
@@ -71,11 +71,11 @@ def train(
             # input("Press Enter to continue...")
 
     # Merge model from grid
-    merged = grid_model.merge()
+    merged = grid_model.grid_merge()
 
     print("Training complete!")
     print(f"Iterations per cell: {c.iterations}")
-    print(f"Total cells trained: {len(grid_model.cells)}")
+    print(f"Total cells trained: {len(grid_model.grid_cells)}")
     print(f"Total Gaussians: {len(merged)}")
 
     return merged

@@ -69,17 +69,27 @@ def index_cameras_by_id(cameras: List[KnownView[T]]) -> Dict[T, KnownView]:
 CompensationType = Literal["last", "uniform", "disabled"]
 
 
-
-# Pseudo-nn.Module that allows differentiable forward pass through a grid of Gaussian models, while only a single cell is active at a time
 @forward_to_active_cell()
 class GridGaussianModel(Generic[T]): # T represents the type of the camera ID
+    """
+    A grid of Gaussian models, where each cell is a Gaussian model. 
+    It pretends to be a single Gaussian model enough to be trained by the basic training function.
+    The grid is split into cells, and only one cell is active at a time and loaded into memory, which makes it possible to train large models on limited memory.
+    During training, the different cells are composited together to render the scene.
+    The actual training logic can be found in `gs/trainers/grid/train.py`.
 
-    cameras: Dict[T, KnownView] # Cameras indexed by their ID
-    cells: Dict[GridIndex, GridGaussianCell[T]]
+    Some methods / properties of `GaussianModel` that we implement can be found in `gs/trainers/grid/forward_properties.py` and are added by the class decorator.
+    Other methods from `GaussianModel` are mirrored explicitly in this class, such as `forward` and `to`.
+    
+    All methods and properties relating to the grid training logic is specifically prefixed with `grid_` to avoid confusion with the methods of `GaussianModel`.
+    """
+
+    grid_cameras: Dict[T, KnownView] # Cameras indexed by their ID
+    grid_cells: Dict[GridIndex, GridGaussianCell[T]]
     _active_cell_index: Union[GridIndex, None]
-    model_store_device: str
-    model_train_device: str
-    default_extra_cell_compensation: CompensationType
+    grid_model_store_device: str
+    grid_model_train_device: str
+    grid_default_extra_cell_compensation: CompensationType
     camera_to_grid_visibility: Dict[T, List[GridIndex]] # Visibility of cameras to cells
     grid_to_camera_visibility: Dict[GridIndex, List[T]] # Visibility of cells to cameras
 
@@ -92,26 +102,26 @@ class GridGaussianModel(Generic[T]): # T represents the type of the camera ID
             model_train_device: str = "cuda",
             default_extra_cell_compensation: CompensationType = "uniform"
     ):
-        self.cells: Dict[GridIndex, GridGaussianCell[T]] = {index: GridGaussianCell(grid, index, cell_model, grid.get_bounding_box(index)) for index, cell_model in models.items()}
-        self.cameras = index_cameras_by_id(cameras)
+        self.grid_cells: Dict[GridIndex, GridGaussianCell[T]] = {index: GridGaussianCell(grid, index, cell_model, grid.get_bounding_box(index)) for index, cell_model in models.items()}
+        self.grid_cameras = index_cameras_by_id(cameras)
         self._active_cell_index = None
         # object.__setattr__(self, "_active_cell_index", None)
-        self.model_store_device = model_store_device
-        self.model_train_device = model_train_device
-        self.default_extra_cell_compensation = default_extra_cell_compensation
+        self.grid_model_store_device = model_store_device
+        self.grid_model_train_device = model_train_device
+        self.grid_default_extra_cell_compensation = default_extra_cell_compensation
 
         # Calculate visibility 
-        self.calculate_visibility()
+        self.grid_calculate_visibility()
 
-    def calculate_visibility(self):
+    def grid_calculate_visibility(self):
         """
         Calculates the visibility of cameras to cells and cells to cameras.
         """
         self.camera_to_grid_visibility = {}
         self.grid_to_camera_visibility = {}
-        for camera in self.cameras.values():
+        for camera in self.grid_cameras.values():
             self.camera_to_grid_visibility[camera.id] = [] # Initialize the visibility of the camera to cells
-            for cell in self.cells.values():
+            for cell in self.grid_cells.values():
                 if camera.frustum.intersects_bounding_box(cell.bounding_box):
                     self.camera_to_grid_visibility[camera.id].append(cell.index)
                     if cell.index not in self.grid_to_camera_visibility:
@@ -138,82 +148,82 @@ class GridGaussianModel(Generic[T]): # T represents the type of the camera ID
         """
         Returns the Gaussian model of the cell at the given ID.
         """
-        return self.cells[index].model
+        return self.grid_cells[index].model
     
     def grid_len(self) -> int:
         """
         Returns the number of cells in the grid.
         """
-        return len(self.cells)
+        return len(self.grid_cells)
     
     def grid_iter(self):
         """
         Returns an iterator over the GaussianGridCells in the grid.
         """
-        return iter(self.cells.values())
+        return iter(self.grid_cells.values())
     
-    def merge(self, clean=True) -> GaussianModel:
+    def grid_merge(self, clean=True) -> GaussianModel:
         """
         Merge the grid of Gaussian models into a single Gaussian model.
         """
-        return merge_model([(cell.model, cell.bounding_box) for cell in self.cells.values()], self.model_store_device, clean)
+        return merge_model([(cell.model, cell.bounding_box) for cell in self.grid_cells.values()], self.grid_model_store_device, clean)
     
-    def set_active_cell_index(self, index: GridIndex):
+    def grid_set_active_cell_index(self, index: GridIndex):
         """
         Set the active cell in which we want to update the parameters.
         """
         # Move the active cell to the training device, and the rest to the storage device
-        for i, cell in self.cells.items():
+        for i, cell in self.grid_cells.items():
             if i == index:
-                cell.model.to(self.model_train_device)
+                cell.model.to(self.grid_model_train_device)
             else:
-                cell.model.to(self.model_store_device)
+                cell.model.to(self.grid_model_store_device)
         self._active_cell_index = index
 
-    def set_active_cell(self, cell: GridGaussianCell[T]):
+    def grid_set_active_cell(self, cell: GridGaussianCell[T]):
         """
         Set the active cell in which we want to update the parameters.
         """
-        self.set_active_cell_index(cell.index)
+        self.grid_set_active_cell_index(cell.index)
 
     @property
-    def active_cell(self) -> GridGaussianCell[T]:
+    def grid_active_cell(self) -> GridGaussianCell[T]:
         """
         Returns the active cell.
         """
         if self._active_cell_index is None:
             raise ValueError("No active cell is set.")
-        return self.cells[self._active_cell_index]
+        return self.grid_cells[self._active_cell_index]
     
     @property
-    def active_cell_index(self) -> GridIndex:
+    def grid_active_cell_index(self) -> GridIndex:
         """
         Returns the index of the active cell.
         """
         return self._active_cell_index
 
-    def get_visible_cells_from_camera(self, camera_id: T) -> List[GridGaussianCell[T]]:
+    def grid_get_visible_cells_from_camera(self, camera_id: T) -> List[GridGaussianCell[T]]:
         """
         Returns a list of cells that a camera should render based on its frustum.
         """
         # Basic implementation: Precompute frustum / cell intersections
-        return [self.cells[cell_index] for cell_index in self.camera_to_grid_visibility[camera_id]]
+        return [self.grid_cells[cell_index] for cell_index in self.camera_to_grid_visibility[camera_id]]
         # TODO: Advanced implementation: Take into account occlusion and visibility, updating the list of visible cells dynamically
     
-    def get_visible_cameras_from_cell(self, cell_index: GridIndex) -> List[KnownView[T]]:
+    def grid_get_visible_cameras_from_cell(self, cell_index: GridIndex) -> List[KnownView[T]]:
         """
         Returns a list of cameras that should render a cell based on its frustum.
         """
         # Basic implementation: Precompute frustum / cell intersections
-        return [self.cameras[cam_id] for cam_id in self.grid_to_camera_visibility[cell_index]]
+        return [self.grid_cameras[cam_id] for cam_id in self.grid_to_camera_visibility[cell_index]]
         # TODO: Advanced implementation: Take into account occlusion and visibility, updating the list of visible cameras dynamically
 
-    def calculate_newest_common_view_snapshot_iteration(self) -> int:
+    def grid_calculate_newest_common_view_snapshot_iteration(self) -> int:
         """
         Returns the best uniform iteration to request for extra cell compensation.
         """
         newest_iterations = set()
-        for cell in self.cells.values():
+        for cell in self.grid_cells.values():
             keys = cell.prerenders.keys()
             if len(keys) == 0: # If a cell has no view snapshots, we know there is no common view snapshot
                 return -1
@@ -226,7 +236,7 @@ class GridGaussianModel(Generic[T]): # T represents the type of the camera ID
         else: # If there are no view snapshots in any cell. This should not happen, since we already checked for cells with no view snapshots.
             return -1
         
-    def prerender_active_cell(self, current_iter: int):
+    def grid_prerender_active_cell(self, current_iter: int):
         """
         Prerender the active cell where and save it as the specified iteration in the active cell's view snapshots.
         """
@@ -234,25 +244,25 @@ class GridGaussianModel(Generic[T]): # T represents the type of the camera ID
             raise ValueError("No active cell is set.")
         # For each camera that can see the active cell, we render the cell and save the view snapshot, save to the active cell's view snapshots
         with torch.no_grad():
-            cameras = self.get_visible_cameras_from_cell(self._active_cell_index)
+            cameras = self.grid_get_visible_cameras_from_cell(self._active_cell_index)
             for camera in cameras:
-                camera.to(self.model_train_device) # Move the camera to the training device
-                rgb, depth, alpha = self.active_cell.model.forward(camera)
-                camera.to(self.model_store_device) # Move the camera back to the storage device (if it was not already there
+                camera.to(self.grid_model_train_device) # Move the camera to the training device
+                rgb, depth, alpha = self.grid_active_cell.model.forward(camera)
+                camera.to(self.grid_model_store_device) # Move the camera back to the storage device (if it was not already there
                 rgb, depth, alpha = rgb.detach().cpu(), depth.detach().cpu(), alpha.detach().cpu()
-                if current_iter not in self.active_cell.prerenders:
-                    self.active_cell.prerenders[current_iter] = {}
-                self.active_cell.prerenders[current_iter][camera.id] = (rgb, depth, alpha)
+                if current_iter not in self.grid_active_cell.prerenders:
+                    self.grid_active_cell.prerenders[current_iter] = {}
+                self.grid_active_cell.prerenders[current_iter][camera.id] = (rgb, depth, alpha)
 
-    def cull_active_cell_prerenders(self, older_than: int):
+    def grid_cull_active_cell_prerenders(self, older_than: int):
         """
         Cull the view snapshots of the active cell that are older than the specified iteration.
         """
         if self._active_cell_index is None:
             raise ValueError("No active cell is set.")
-        for iteration in list(self.active_cell.prerenders.keys()):
+        for iteration in list(self.grid_active_cell.prerenders.keys()):
             if iteration < older_than:
-                del self.active_cell.prerenders[iteration]
+                del self.grid_active_cell.prerenders[iteration]
         
     def forward(
             self, 
@@ -274,23 +284,23 @@ class GridGaussianModel(Generic[T]): # T represents the type of the camera ID
 
         # If camera is not a KnownView, then we directly render the active cell
         if not isinstance(camera, KnownView):
-            return self.active_cell.model.forward(camera, active_sh_degree)
+            return self.grid_active_cell.model.forward(camera, active_sh_degree)
         
         if extra_cell_compensation is None:
-            extra_cell_compensation = self.default_extra_cell_compensation
+            extra_cell_compensation = self.grid_default_extra_cell_compensation
 
         # First, we render the current active cell
-        active_rgb, active_depth, active_alpha = self.active_cell.model.forward(camera, active_sh_degree)
+        active_rgb, active_depth, active_alpha = self.grid_active_cell.model.forward(camera, active_sh_degree)
         if extra_cell_compensation == "disabled": # Early return if we do not composite other cells
             return active_rgb, active_depth, active_alpha
-        active_plane_distance = self.active_cell.plane_distance(camera)
+        active_plane_distance = self.grid_active_cell.plane_distance(camera)
 
         # Next, we garner all the other cells within the frustum
-        in_view_cells = self.get_visible_cells_from_camera(camera.id)
+        in_view_cells = self.grid_get_visible_cells_from_camera(camera.id)
 
         # We calculate which iteration to request for extra cell compensation
         if extra_cell_compensation == "uniform":
-            requested_iteration = self.calculate_newest_common_view_snapshot_iteration()
+            requested_iteration = self.grid_calculate_newest_common_view_snapshot_iteration()
         elif extra_cell_compensation == "last":
             requested_iteration = None
         else:
@@ -305,7 +315,7 @@ class GridGaussianModel(Generic[T]): # T represents the type of the camera ID
         # We gather all the other layers to composite as ((RGB, depth, alpha), plane_distance) tuples
         prerendered_layers = [(cell.get_prerender(camera, requested_iteration), cell.plane_distance(camera)) for cell in in_view_cells if cell.current_iter != 0 and cell.index != self._active_cell_index]
         # Move all prerendered layers to the training device
-        prerendered_layers = [((rgb.to(self.model_train_device), depth.to(self.model_train_device), alpha.to(self.model_train_device)), plane_distance) for ((rgb, depth, alpha), plane_distance) in prerendered_layers]
+        prerendered_layers = [((rgb.to(self.grid_model_train_device), depth.to(self.grid_model_train_device), alpha.to(self.grid_model_train_device)), plane_distance) for ((rgb, depth, alpha), plane_distance) in prerendered_layers]
         # We add the active cell to the layers
         layers = prerendered_layers + [((active_rgb, active_depth, active_alpha), active_plane_distance)]
         # We sort the layers by plane distance
@@ -322,6 +332,6 @@ class GridGaussianModel(Generic[T]): # T represents the type of the camera ID
     def to(self, device: str):
         # This behaviour honestly is not even needed in our use, since calling ".set_active_cell" will move the active cell to the device
         # We only move the active cell to the device
-        self.active_cell.model.to(device)
+        self.grid_active_cell.model.to(device)
         # We set the device for self.model_train_device such that the next active cell will be moved to the correct device
-        self.model_train_device = device
+        self.grid_model_train_device = device
