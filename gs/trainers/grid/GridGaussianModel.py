@@ -274,7 +274,6 @@ class GridGaussianModel(Generic[T]): # T represents the type of the camera ID
 
         # If camera is not a KnownView, then we directly render the active cell
         if not isinstance(camera, KnownView):
-            print("Rendering active cell directly since camera is not a KnownView")
             return self.active_cell.model.forward(camera, active_sh_degree)
         
         if extra_cell_compensation is None:
