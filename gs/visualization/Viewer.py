@@ -63,7 +63,7 @@ def false_color_depth(depth: torch.Tensor, alpha: torch.Tensor, range: Union[Lit
     # Interpret depth as hue, alpha as value.
     hue = depth
     saturation = torch.ones_like(hue)
-    value = alpha
+    value = (1-depth) * alpha
     rgb = hsv_to_rgb(hue, saturation, value).squeeze(1)
     return rgb
 
