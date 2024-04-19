@@ -170,3 +170,5 @@ output/
 
 # But not the README.md file
 !.devcontainer/.pip-cache/README.md
+
+samples/

@@ -1,6 +1,7 @@
 from typing import List
 from gs.core.GaussianModel import GaussianModel
 from gs.core.View import KnownView
+from gs.helpers.scene import estimate_scene_scale
 from gs.trainers.grid.config import GridTrainConfig
 from gs.trainers.grid.GridGaussianModel import GridGaussianModel
 from gs.trainers.basic.train import train as basic_train
@@ -19,6 +20,11 @@ def train(
         viewer = _viewer
     viewer.set_model(model)
 
+    if c.scene_scale is None:
+        scene_scale = estimate_scene_scale(cameras).item()
+    else:
+        scene_scale = c.scene_scale
+
     # Split model into grid on its original device
     model.to(c.model_store_device)
     grid_model = GridGaussianModel.from_gaussian_model(model, cameras, c.grid, c.model_store_device, c.model_train_device, min_gaussians=c.min_gaussians, default_extra_cell_compensation="last")
@@ -35,6 +41,7 @@ def train(
             c_cell = GridTrainConfig(**c.__dict__)
             c_cell.starting_iter = cell.current_iter
             c_cell.ending_iter = target_iteration
+            c_cell.scene_scale = scene_scale
 
             bounding_box_viz = viewer.add_cell_bounary(cell)
 
