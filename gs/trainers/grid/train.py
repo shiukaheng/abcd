@@ -4,16 +4,24 @@ from gs.core.View import KnownView
 from gs.trainers.grid.config import GridTrainConfig
 from gs.trainers.grid.GridGaussianModel import GridGaussianModel
 from gs.trainers.basic.train import train as basic_train
+from gs.visualization.Viewer import Viewer
 
 def train(
         model: GaussianModel, 
         cameras: List[KnownView], 
-        c: GridTrainConfig
+        c: GridTrainConfig,
+        _viewer = None
     ):
+
+    if _viewer is None:
+        viewer = Viewer(auto_start=False)
+    else:
+        viewer = _viewer
+    viewer.set_model(model)
 
     # Split model into grid on its original device
     model.to(c.model_store_device)
-    grid_model = GridGaussianModel.from_gaussian_model(model, cameras, c.grid, c.model_store_device, c.model_train_device)
+    grid_model = GridGaussianModel.from_gaussian_model(model, cameras, c.grid, c.model_store_device, c.model_train_device, min_gaussians=c.min_gaussians)
 
     # We train each cell in the grid for sync_interval iterations
     while all(cell.current_iter < c.iterations for cell in grid_model.grid_iter()): # While there are cells that have not reached the target iteration
@@ -28,14 +36,20 @@ def train(
             c_cell.starting_iter = cell.current_iter
             c_cell.ending_iter = target_iteration
 
+            bounding_box_viz = viewer.add_cell_bounary(cell)
+
             # Train the cell
             grid_model.set_active_cell_index(cell.index)
             visible_cameras = grid_model.get_visible_cameras_from_cell(cell.index) # Get the cameras that can see the cell
             basic_train(
                 grid_model,
                 visible_cameras,
-                c_cell
+                c_cell,
+                viewer
             )
+
+            cell.clean_model_edges()
+            bounding_box_viz.remove()
 
             # Pre-render the cell if required
             if c.extra_cell_compensation != "disabled":
@@ -48,6 +62,11 @@ def train(
             # input("Press Enter to continue...")
 
     # Merge model from grid
-    return grid_model.merge()
+    merged = grid_model.merge()
+
+    if _viewer is None:
+        viewer.start()
+
+    return merged
 
 

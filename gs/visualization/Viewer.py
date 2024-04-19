@@ -1,6 +1,7 @@
 
 import time
 from typing import Generic, List, Literal, NamedTuple, Tuple, TypeVar, Union
+import numpy as np
 import torch
 import viser
 from gs.core.GaussianModel import GaussianModel
@@ -82,10 +83,10 @@ class GroupSceneNodeHandle(NamedTuple):
             handle.remove()
 
 class Viewer(Generic[T]):
-    def __init__(self, model: GaussianModel, width=1920, frame_rate=15, reuse_viser=True, auto_start=True,):
+    def __init__(self, width=1920, frame_rate=15, reuse_viser=True, auto_start=True,):
 
         # Initialize the viewer
-        self.model = model
+        self.model = None
         self.render_once_thread = None # Thread for rendering of each frame. Helps ease load on the main thread when rendering is slow
         self.render_once_last_time = 0 # Time of the last render pass. For skipping render passes if they are too close to each other
         self.render_channel = {} # Which channel to display in the viewer
@@ -114,6 +115,12 @@ class Viewer(Generic[T]):
             self.render_channel[gui_event.client_id] = render_channel_switcher.value
         render_channel_switcher.on_update(update_render_channel)
 
+    def set_model(self, model: GaussianModel):
+        """
+        Set the model to visualize
+        """
+        self.model = model
+
     def _send_renders(self, renders):
         """
         Send the renders to the clients
@@ -130,6 +137,9 @@ class Viewer(Generic[T]):
         """
         Do a single render pass. Sends the renders on another thread.
         """
+        # If no model, skip this render pass
+        if self.model is None:
+            return
         # If render_once_thread is running, skip this render pass
         minimum_time = 1.0 / self.frame_rate
         # If the last render was less than minimum_time ago, skip this render pass
@@ -220,44 +230,25 @@ class Viewer(Generic[T]):
             position=camera.center,
         )
     
-    def add_cell_bounary(self, cell: GridGaussianCell, color=(1, 1, 1), thickness=0.01):
+    def add_cell_bounary(self, cell: GridGaussianCell, color=(255, 255, 255), line_width=2):
         """
         Add bounding box to the viewer
         """
         name = f"/bounding_boxes/{cell.index.to_string_id()}"
         # Unfortuately Viser does not support creating 3D wireframe boxes. We can instead use 6 1x1 grid planes to represent the bounding box
-        grid_args = []
-        # Iterate over all faces
-        orientations = ["xz", "xy", "yx", "yz", "zx", "zy"]
-        for i in range(6):
-            axis = i // 2
-            direction = i % 2
-            # Convert axis and direction to quaternion
-            quaternion = [0,0,0,0]
-            quaternion[axis] = 1
-            quaternion[3] = direction
-            quaternion = tuple(quaternion)
-            center = cell.center
-            center[axis] += (cell.grid.grid_size * (1 if direction == 0 else -1)) / 2
-            # Add grid plane
-            grid_args.append({
+        curve_args = []
+        for i, segment in enumerate(cell.bounding_box.get_edges()):
+            curve_args.append({
                 "name": f"{name}/{i}",
-                "width": cell.grid.grid_size,
-                "height": cell.grid.grid_size,
-                "width_segments": 1,
-                "height_segments": 1,
-                "plane": orientations[i],
-                "cell_color": color,
-                "cell_thickness": thickness,
-                "cell_size": 1,
-                "section_color": color,
-                "section_thickness": thickness,
-                "section_size": 1,
-                "wxyz": quaternion,
-                "position": center
+                "positions": segment,
+                "control_points": segment,
+                "line_width": line_width,
+                "color": color,
+                "segments": 1,
             })
+
         return GroupSceneNodeHandle([
-            self.viser.add_grid(**args) for args in grid_args
+            self.viser.add_spline_cubic_bezier(**args) for args in curve_args
         ])
         
         

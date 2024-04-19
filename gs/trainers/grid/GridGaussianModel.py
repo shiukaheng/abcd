@@ -53,11 +53,11 @@ class GridGaussianCell(Generic[T]): # T represents the type of the camera ID
         """
         self.model = cut(self.model, self.bounding_box)
 
-def split_to_grid_gaussian_cells(model: GaussianModel, grid: Grid) -> Dict[GridIndex, GaussianModel]:
+def split_to_grid_gaussian_cells(model: GaussianModel, grid: Grid, min_gaussians: int) -> Dict[GridIndex, GaussianModel]:
     """
     Splits a Gaussian model into a grid of cells.
     """
-    split = split_model(model, grid)
+    split = split_model(model, grid, min_gaussians)
     return {index: cell_model for index, (cell_model, bounding_box) in split.items()}
 
 def index_cameras_by_id(cameras: List[KnownView[T]]) -> Dict[T, KnownView]:
@@ -125,12 +125,13 @@ class GridGaussianModel(Generic[T]): # T represents the type of the camera ID
         grid: Grid = Grid(),
         model_store_device: str = "cpu",
         model_train_device: str = "cuda",
-        default_extra_cell_compensation: CompensationType = "uniform"
+        default_extra_cell_compensation: CompensationType = "uniform",
+        min_gaussians: int = 50
     ):
         """
         Create a GridGaussianModel from a single Gaussian model.
         """
-        cells = split_to_grid_gaussian_cells(input_model, grid)
+        cells = split_to_grid_gaussian_cells(input_model, grid, min_gaussians=min_gaussians)
         return GridGaussianModel(cells, cameras, grid, model_store_device, model_train_device, default_extra_cell_compensation)
 
     def grid_get(self, index: GridIndex) -> GaussianModel:

@@ -1,5 +1,5 @@
 import random
-from typing import List
+from typing import List, Union
 import torch
 from tqdm import tqdm
 from gs.core.View import KnownView
@@ -16,6 +16,7 @@ def train(
         model: GaussianModel,
         cameras: List[KnownView],
         c: BasicTrainConfig,
+        _viewer: Union[None, Viewer] = None # If this training loop is chained with another, we can pass the viewer to avoid creating a new one.
     ):
     """
     This is the most basic trainer for Gaussian splatting. It mirrors the original training logic.
@@ -25,7 +26,11 @@ def train(
         model.to(c.model_train_device)
 
     # Prepare model visualizer
-    # viewer = Viewer(model, auto_start=False)
+    if _viewer is None:
+        viewer = Viewer(auto_start=False)
+    else:
+        viewer = _viewer
+    viewer.set_model(model)
 
     # We estimate the scene size, such that a larger scene will have a larger learning rate. It is a heuristic defined in the original code.
     if c.scene_scale is None:
@@ -108,13 +113,10 @@ def train(
             if c.densify_from_iter < i < c.densify_until_iter and not (max_memory_reached or max_gaussians_reached):
                 if i % c.densify_interval == 0:
                     densify(model, optimizer, scene_scale, c.densify_grad_threshold)
-                    # model.assert_validity()
                     if i > c.opacity_reset_interval:
                         prune(model, optimizer, scene_scale, c.opacity_threshold, c.screen_size_threshold, c.world_size_threshold_multiplier)
-                        # model.assert_validity()
                     else:
                         prune_opacity_only(model, optimizer, c.opacity_threshold)
-                        # model.assert_validity()
 
             # Opacity reset
             if (i % c.opacity_reset_interval == 0) and (i > c.densify_from_iter):
@@ -124,7 +126,7 @@ def train(
             optimizer.step()
             optimizer.zero_grad(set_to_none=True) # We zero the gradients so they do not accumulate to the next iteration.
 
-            # viewer.render_once()
+            viewer.render_once()
 
             pbar.set_description(f"Loss: {loss.item()}, Num splats: {format_number(model.positions.size(0))}")
             torch.cuda.empty_cache() # We empty the cache to avoid memory leaks.
@@ -137,4 +139,5 @@ def train(
                 max_gaussians_reached = True
                 print("Max Gaussians reached")
 
-    # viewer.start()
+    if _viewer is None: # If there was no chained viewer, we keep the viewer open.
+        viewer.start()

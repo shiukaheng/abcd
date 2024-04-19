@@ -62,14 +62,14 @@ class Frustum:
         ]
 
         for planes in plane_combinations:
-            A = torch.stack([p.normal for p in planes])
-            b = torch.tensor([-p.d for p in planes])
+            A = torch.stack([tuple(p.normal) for p in planes])
+            b = torch.tensor([-float(p.d) for p in planes])
             corner = torch.linalg.solve(A, b)
-            corners.append(corner)
+            corners.append(tuple(corner))
 
         return corners
 
-    def get_edges(self) -> List[Tuple[torch.Tensor, torch.Tensor]]:
+    def get_edges(self) -> List[Tuple[Tuple[float, float, float], Tuple[float, float, float]]]:
         """
         Using the corners of the frustum, define the edges.
         """
@@ -80,7 +80,7 @@ class Frustum:
             (4, 5), (4, 6), (5, 7), (6, 7),  # Far plane
             (0, 4), (1, 5), (2, 6), (3, 7)   # Connecting edges
         ]
-        edges = [(corners[start], corners[end]) for start, end in edge_indices]
+        edges = [(tuple(corners[start]), tuple(corners[end])) for start, end in edge_indices]
         return edges
 
     def __str__(self) -> str:

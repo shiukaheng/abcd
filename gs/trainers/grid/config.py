@@ -12,3 +12,4 @@ class GridTrainConfig(BasicTrainConfig):
     max_memory: Union[int, None] = None
     max_gaussians: Union[int, None] = None
     extra_cell_compensation: Literal["last", "uniform", "disabled"] = "uniform"
+    min_gaussians: int = 50

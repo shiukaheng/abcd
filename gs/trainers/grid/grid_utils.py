@@ -10,12 +10,12 @@ def cut(model: GaussianModel, bounding_box: BoundingBox, invert=False) -> Gaussi
     """
     Cuts out a part of a Gaussian model using a bounding box.
     """
-    valid = torch.all((model.positions >= bounding_box.min) & (model.positions <= bounding_box.max), dim=1)
+    valid = torch.all((model.positions >= bounding_box.min.to(model.positions.device)) & (model.positions <= bounding_box.max.to(model.positions.device)), dim=1)
     if invert:
         valid = ~valid
     return model[valid]
 
-def split_model(model: GaussianModel, grid: Grid) -> Dict[GridIndex, Tuple[GaussianModel, BoundingBox]]:
+def split_model(model: GaussianModel, grid: Grid, min_gaussians: int) -> Dict[GridIndex, Tuple[GaussianModel, BoundingBox]]:
     """
     Splits a Gaussian model into a grid of cells.
     """
@@ -24,7 +24,7 @@ def split_model(model: GaussianModel, grid: Grid) -> Dict[GridIndex, Tuple[Gauss
     cell_models = {}
     for cell_bounding_box, cell_index in tqdm(cells, desc="Splitting model into cells"):
         cell_model = cut(model, cell_bounding_box)
-        if len(cell_model) == 0: # Skip empty cells
+        if len(cell_model) < min_gaussians:
             continue
         cell_models[cell_index]=(cell_model, cell_bounding_box)
     return cell_models
