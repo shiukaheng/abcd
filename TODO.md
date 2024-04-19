@@ -13,7 +13,7 @@ We deliberately don't want to optimize camera poses jointly with Gaussians, sinc
     - Large Gaussians become distorted in the projection process due to first-degree linearization (GS++)
 - [ ] Normal computation (GaussianPro)
     - [ ] Post-processing depth map to compute normals
-    - [ ] OR: 
+    - [ ] OR: Use point scale to determine normals
 - [ ] Depth and normal supervision, accounting for confidence using DUST3R (https://arxiv.org/abs/2003.10432) (GaussianPro, NOT done in InstantSplat)
 - [ ] Normal smoothing loss (GaussianPro)
 - [ ] Dense / linear layer before outputting spherical harmonic coefficients, with additional info based on camera identity, posed as embedding layer
