@@ -30,3 +30,5 @@ We deliberately don't want to optimize camera poses jointly with Gaussians, sinc
     - Uncertainty needs to be properly modelled to avoid high frequency artifacts (MIP-Splatting)
 - [ ] Address far-away issues
     - MIP-Splatting replaces 2D dilation filter with 3D smoothing filter. However, we want to skip this because it requires custom rendering pipeline that is hard to adopt to different platforms.
+# Web-based distribution
+- [ ] Potree + antimatter15 WebGL splatting
