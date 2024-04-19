@@ -108,9 +108,12 @@ def train(
 
         # We perform a forward pass and compute the loss.
 
-        rendered, _, _ = model.forward(camera, active_sh_degree=active_sh_degree)
+        rendered, depth, alpha = model.forward(camera, active_sh_degree=active_sh_degree)
 
         loss = mix_l1_ssim_loss(rendered, camera.image)
+        # Add a loss for transparency so the Gaussians fill the screen. We want alpha to be 1 everywhere.
+        if c.transparency_loss_weight > 0:
+            loss += c.transparency_loss_weight * torch.mean((alpha - 1.0) ** 2)
 
         # We perform a backward pass and update the parameters.
         loss.backward()

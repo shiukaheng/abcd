@@ -15,7 +15,7 @@ cameras, pointcloud = load('./datasets/autoexposure')
 input_model = GaussianModel.from_point_cloud(
     pointcloud, 
     constant_scale=0.05, 
-    # scales_range=(0.0001, 0.5)
+    scales_range=(0.0001, 0.5)
 )
 
 output_model = train(
@@ -28,6 +28,7 @@ output_model = train(
         scales_lr=0.01,
         densify_from_iter=200,
         sh_mlp_lr=0.01,
+        transparency_loss_weight=0.1,
         # preview_camera=cameras[20],
     ))
 

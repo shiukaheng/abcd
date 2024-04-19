@@ -37,3 +37,4 @@ class BasicTrainConfig:
     starting_iter: int = 0
     ending_iter: Union[int, None] = None
     preview_camera: Union[KnownView, None] = None
+    transparency_loss_weight: float = 0.0

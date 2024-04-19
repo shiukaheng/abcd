@@ -160,6 +160,7 @@ class GaussianModel(nn.Module):
     def forward(self, camera: ViewWithRes, active_sh_degree: Union[int, None] = None) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Render Gaussians to image space with given camera.
+        Returns rendered image, depth and alpha.
         """
         if active_sh_degree is None:
             active_sh_degree = self.sh_degree
