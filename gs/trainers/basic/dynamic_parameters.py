@@ -1,26 +1,33 @@
-import numpy as np
 import torch
 from gs.core.GaussianModel import GaussianModel
 from torch import nn
-from gs.helpers.math import inverse_sigmoid
 from gs.helpers.transforms import quat_to_rot
 
 """
-This module contains helper functions for densifying and pruning Gaussian models. It is not attached as a class method since it required direct access to the optimizer.
+This module contains helper functions for densifying and pruning Gaussian models, as well as adjusting the opacities. 
+These are not class methods for GaussianModel since it requires direct access to the optimizer.
 """
 
-def densify(model: GaussianModel, optimizer: torch.optim.Adam, scene_scale: float, gradient_threshold: float, percent_dense: float = 0.01) -> None:
+def densify(model: GaussianModel, optimizer: torch.optim.Adam, scene_scale: float, gradient_threshold: float, percent_dense: float = 0.01, safety_margin_factor=0.05) -> None:
     """
     Densifies the Gaussian model by cloning and splitting Gaussians based on the gradient magnitude and the size of the Gaussian.
     """
     gradients = model.mean_gradient_magnitude
     exceed_gradient_mask = torch.where(gradients > gradient_threshold, True, False).squeeze(1)
-    large_gaussian_mask = (torch.max(model.scales_activatoin(model.scales), dim=1).values > percent_dense * scene_scale)
+    if model.scales_range is None:
+        large_gaussian_mask = (torch.max(model.scales_activation(model.scales), dim=1).values > percent_dense * scene_scale)
+    else:
+        # 90% of upper limit is defined as large
+        large_gaussian_mask = (torch.max(model.scales_activation(model.scales), dim=1).values > model.scales_range[1] * 0.9)
     clone_mask = torch.logical_and(exceed_gradient_mask, ~large_gaussian_mask)
     clone_gaussians(model, optimizer, clone_mask)
-    split_mask = torch.logical_and(exceed_gradient_mask, large_gaussian_mask)
+    if model.scales_range is None:
+        split_mask = torch.logical_and(exceed_gradient_mask, large_gaussian_mask)
+    else:
+        # Split if exceeding 90% of the upper limit regardless of gradient
+        split_mask = large_gaussian_mask
     padded_split_mask = pad_mask(split_mask, model, model.positions.device)
-    split_gaussians(model, optimizer, padded_split_mask)
+    split_gaussians(model, optimizer, padded_split_mask, safety_margin_factor=safety_margin_factor)
 
 def prune(model: GaussianModel, optimizer: torch.optim.Adam, scene_scale: float, opacity_threshold: float, screen_size_threshold: float, world_size_threshold_multiplier: float = 0.1) -> None:
     """
@@ -28,7 +35,7 @@ def prune(model: GaussianModel, optimizer: torch.optim.Adam, scene_scale: float,
     """
     opacity_mask = model.opacities_activation(model.opacities) < opacity_threshold
     screen_size_mask = model.max_radii2D > screen_size_threshold
-    world_size_mask = model.scales_activatoin(model.scales).max(dim=1).values > world_size_threshold_multiplier * scene_scale
+    world_size_mask = model.scales_activation(model.scales).max(dim=1).values > world_size_threshold_multiplier * scene_scale
     final_mask = opacity_mask.squeeze(1).logical_or_(screen_size_mask.squeeze(1).logical_or_(world_size_mask))
     cull_gaussians(model, optimizer, final_mask)
 
@@ -82,6 +89,13 @@ def append_new_gaussians(
     model._gradient_accumulator_denominator = torch.zeros((model.positions.shape[0], 1), device=device)
     model.max_radii2D = torch.zeros((model.positions.shape[0]), device=device).unsqueeze(1)
 
+def check_mask_validity(mask: torch.Tensor, model: GaussianModel) -> None:
+    """
+    Checks if a mask is valid for the model or will lead to out-of-bounds errors.
+    """
+    if mask.size(0) != model.positions.size(0):
+        print("Mask length does not match model length.")
+
 def clone_gaussians(
         model: GaussianModel, 
         optimizer: torch.optim.Adam, 
@@ -90,6 +104,7 @@ def clone_gaussians(
     """
     Clones Gaussians based on a mask.
     """
+    # check_mask_validity(mask, model)
     positions = model.positions[mask]
     rotations = model.rotations[mask]
     scales = model.scales[mask]
@@ -106,6 +121,7 @@ def cull_gaussians(
     """
     Removes Gaussians based on a mask.
     """
+    # check_mask_validity(mask, model)
     keep_mask = ~mask
     for group in optimizer.param_groups:
         stored_state = optimizer.state.get(group["params"][0], None)
@@ -128,10 +144,12 @@ def split_gaussians(
         optimizer: torch.optim.Adam,
         mask: torch.Tensor,
         n_samples: int = 2,
+        safety_margin_factor: float = 0.05
     ) -> None:
     """
     Splits Gaussians based on a mask.
     """
+    # check_mask_validity(mask, model)
     device = model.positions.device
     positions = model.positions[mask]
     rotations = model.rotations[mask]
@@ -141,7 +159,7 @@ def split_gaussians(
     sh_coefficients_rest = model.sh_coefficients_rest[mask]
     
     # We sample from a normal distribution with a standard deviation of 80% of the original scale.
-    sds = model.scales_activatoin(scales).repeat(n_samples, 1)
+    sds = model.scales_activation(scales).repeat(n_samples, 1)
     means = torch.zeros((sds.size(0), 3), device=device)
     samples = torch.normal(means, sds)
     p_rotations = quat_to_rot(rotations).repeat(n_samples, 1, 1)
@@ -149,9 +167,22 @@ def split_gaussians(
     # We create new Gaussians with the sampled positions. Scale is divided by 0.8 * n_samples of the original scale.
     new_positions = torch.bmm(p_rotations, samples.unsqueeze(-1)).squeeze(-1) + positions.repeat(n_samples, 1)
     new_rotations = rotations.repeat(n_samples, 1)
-    new_scales = model.scales_inverse_activatoin(
-        model.scales_activatoin(scales).repeat(n_samples, 1) / (0.8 * n_samples)
-    )
+    if model.scales_range is None:
+        new_scales = model.scales_inverse_activation(
+            model.scales_activation(scales).repeat(n_samples, 1) / (0.8 * n_samples)
+        )
+    else:
+        scale_range = model.scales_range[1] - model.scales_range[0]
+        safety_margin = scale_range * safety_margin_factor
+        new_scales = model.scales_inverse_activation(
+            torch.clamp(
+                model.scales_activation(scales).repeat(n_samples, 1) / (0.8 * n_samples),
+                model.scales_range[0] + safety_margin,
+                model.scales_range[1] - safety_margin
+            )
+        )
+        # Because of quirks of inverse_activation, -inf will be returned when the scale is exactly at the lower bound, and nan when at the upper bound.
+        # Thus, 
     new_opacities = opacities.repeat(n_samples, 1)
     new_sh_coefficients_0 = sh_coefficients_0.repeat(n_samples, 1, 1)
     new_sh_coefficients_rest = sh_coefficients_rest.repeat(n_samples, 1, 1)
@@ -205,25 +236,3 @@ def reset_opacities(model: GaussianModel, optimizer: torch.optim.Adam, opacity: 
         raise ValueError("NaNs in new opacities.")
     params = replace_tensor_to_optimizer(optimizer, new_opacities, "opacities")
     model.opacities = params["opacities"]
-
-def get_expon_lr_func(
-    lr_init: float, lr_final: float, lr_delay_steps: int = 0, 
-    lr_delay_mult: float = 1.0, max_steps: int = 1000000
-) -> callable:
-    """
-    Returns a function that computes the learning rate based on an exponential decay.
-    """
-    def helper(step: int) -> float:
-        if step < 0 or (lr_init == 0.0 and lr_final == 0.0):
-            return 0.0
-        if lr_delay_steps > 0:
-            delay_rate = lr_delay_mult + (1 - lr_delay_mult) * np.sin(
-                0.5 * np.pi * np.clip(step / lr_delay_steps, 0, 1)
-            )
-        else:
-            delay_rate = 1.0
-        t = np.clip(step / max_steps, 0, 1)
-        log_lerp = np.exp(np.log(lr_init) * (1 - t) + np.log(lr_final) * t)
-        return delay_rate * log_lerp
-
-    return helper

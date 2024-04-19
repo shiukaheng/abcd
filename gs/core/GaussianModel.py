@@ -1,14 +1,16 @@
 import math
 import os
+from typing import Tuple, Union
 import numpy as np
 import torch
 from torch import nn
-from gs.core.BaseCamera import BaseCamera
+from gs.core.View import ViewWithRes
 from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
 from gs.core.BasePointCloud import BasePointCloud
+from gs.geometry.bounding_box import BoundingBox
 from gs.helpers.math import create_scaled_sigmoid, inverse_sigmoid
 from gs.helpers.spherical_harmonics import rgb_to_sh
-from gs.helpers.system import mkdir_p
+from gs.helpers.path import mkdir_p
 from gs.helpers.transforms import build_covariance_from_scaling_rotation
 from simple_knn._C import distCUDA2
 from plyfile import PlyData, PlyElement
@@ -25,6 +27,17 @@ class GaussianModel(nn.Module):
     radii: torch.Tensor
 
     # Basic functionality
+
+    @staticmethod
+    def get_scales_activations(scales_range: Union[Tuple[float, float], None]=None):
+        """
+        Get the activation functions for scales based on the given size limit.
+        """
+        if scales_range is not None:
+            scaled_sigmoid, inverse_scaled_sigmoid = create_scaled_sigmoid(scales_range[0], scales_range[1])
+            return scaled_sigmoid, inverse_scaled_sigmoid
+        else:
+            return torch.exp, torch.log
     
     def __init__(
         self,
@@ -37,8 +50,9 @@ class GaussianModel(nn.Module):
         # Other parameters
         sh_degree: int=4, # Degree of spherical harmonics
         background_color: torch.Tensor=torch.tensor([0, 0, 0], dtype=torch.float32), # Background color
-        min_scale: float=0.0001, # Minimum scale for sigmoid
-        max_scale: float=0.05, # Maximum scale for sigmoid
+        # min_scale: float=0.0001, # Minimum scale for sigmoid
+        # max_scale: float=0.05, # Maximum scale for sigmoid
+        scales_range: Union[Tuple[float, float], None] = None, # Minimum and maximum scale for sigmoid
     ):
         super().__init__()
         # Gaussian parameters defining geometry and appearance to be optimized.
@@ -51,14 +65,11 @@ class GaussianModel(nn.Module):
 
         # Intermediate variables
         self.sh_degree = sh_degree
-        background_color = background_color
         self.viewspace_points = None
 
-        scaled_sigmoid, inverse_scaled_sigmoid = create_scaled_sigmoid(min_scale, max_scale)
-
         # Set activation functions
-        self.scales_activatoin = scaled_sigmoid
-        self.scales_inverse_activatoin = inverse_scaled_sigmoid
+        self.scales_range = scales_range
+        self.scales_activation, self.scales_inverse_activation = self.get_scales_activations(scales_range)
         self.covariance_activation = build_covariance_from_scaling_rotation
         self.opacities_activation = torch.sigmoid
         self.opacities_inverse_activation = inverse_sigmoid
@@ -77,7 +88,7 @@ class GaussianModel(nn.Module):
 
         self.radii = None
     
-    def forward(self, camera: BaseCamera, active_sh_degree: int=None):
+    def forward(self, camera: ViewWithRes, active_sh_degree: Union[int, None] = None) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Render Gaussians to image space with given camera.
         """
@@ -102,11 +113,11 @@ class GaussianModel(nn.Module):
             tanfovy=tan_fov_y,
             viewmatrix=camera.world_view_transform,
             projmatrix=camera.full_proj_transform,
-            campos=camera.camera_center,
+            campos=camera.center,
             sh_degree=active_sh_degree,
             image_height=int(camera.image_height),
             image_width=int(camera.image_width),
-            bg=torch.tensor([0, 0, 0], dtype=torch.float32, device="cuda"),
+            bg=self.background_color,
             scale_modifier=1.0,
             prefiltered=False,
             debug=False,
@@ -120,7 +131,7 @@ class GaussianModel(nn.Module):
             means2D=self.viewspace_points,
             shs=self.sh_coefficients,
             opacities=self.opacities_activation(self.opacities),
-            scales=self.scales_activatoin(self.scales),
+            scales=self.scales_activation(self.scales),
             rotations=self.rotations_activation(self.rotations),
         )
         return rendered_image, depth, alpha
@@ -141,7 +152,7 @@ class GaussianModel(nn.Module):
             self._gradient_accumulator_denominator[visible_gaussians] += 1 # Add 1 to denominator for each point, so we can average the gradient later
 
         self.max_radii2D[visible_gaussians] = torch.max(self.max_radii2D[visible_gaussians], self.radii[visible_gaussians].unsqueeze(1))
-    
+
     @property
     def sh_coefficients(self):
         return torch.cat([self.sh_coefficients_0, self.sh_coefficients_rest], dim=1)
@@ -165,7 +176,7 @@ class GaussianModel(nn.Module):
         return m
     
     @staticmethod
-    def from_point_cloud(pointcloud: BasePointCloud, sh_degree: int=3, background_color: torch.Tensor=torch.tensor([0, 0, 0], dtype=torch.float32), constant_scale: float=None, min_scale: float=0.0001, max_scale: float=0.05):
+    def from_point_cloud(pointcloud: BasePointCloud, sh_degree: int=3, background_color: torch.Tensor=torch.tensor([0, 0, 0], dtype=torch.float32), constant_scale: float=None, scales_range: Union[Tuple[float, float], None]=None):
         """
         Create GaussianModel from PointCloud. This is useful for converting PointClouds to GaussianModels, which can be rendered using rasterizer.
         """
@@ -179,15 +190,18 @@ class GaussianModel(nn.Module):
         sh_coefficients = sh_coefficients.transpose(1, 2)
 
         # Initialize scale
-        scale_transform, inverse_scale_transform = create_scaled_sigmoid(min_scale, max_scale)
-        constant_scale = min(max(constant_scale, min_scale), max_scale) if constant_scale is not None else None
+        scales_activation, inverse_scale_transform = GaussianModel.get_scales_activations(scales_range)
+        if constant_scale is not None and scales_range is not None:
+            constant_scale = min(max(constant_scale, scales_range[0]), scales_range[1])
 
         if constant_scale is not None:
             scales = inverse_scale_transform(torch.tensor([constant_scale], dtype=torch.float).repeat(positions.shape[0], 3))
         else:
             dist = torch.sqrt(torch.clamp_min(distCUDA2(torch.from_numpy(np.asarray(pointcloud.points)).float().cuda()), 0.0000001))
             # Clamp dist with min max
-            dist = torch.clamp(dist, min_scale, max_scale)
+            if scales_range is not None:
+                min_scale, max_scale = scales_range
+                dist = torch.clamp(dist, min_scale, max_scale)
             scales = inverse_scale_transform(dist[...,None].repeat(1, 3))
 
         # Initialize rotation
@@ -206,8 +220,7 @@ class GaussianModel(nn.Module):
             opacities=opacities,
             sh_degree=sh_degree,
             background_color=background_color,
-            min_scale=min_scale,
-            max_scale=max_scale
+            scales_range=scales_range
         )
     
     # Convenience functions
@@ -419,3 +432,36 @@ class GaussianModel(nn.Module):
         )
 
         return gaussian_model
+    
+    def assert_validity(self):
+        # All parameters should be on the same device
+        # All parameters should have same length in the first dimension
+        # All parameters should not have NaN values
+        # All parameters should not have Inf values
+
+        device = self.positions.device
+        assert all(param.device == device for param in [self.positions, self.sh_coefficients_0, self.sh_coefficients_rest, self.rotations, self.scales, self.opacities])
+
+        assert self.positions.shape[0] == self.sh_coefficients_0.shape[0] == self.sh_coefficients_rest.shape[0] == self.rotations.shape[0] == self.scales.shape[0] == self.opacities.shape[0]
+
+        assert not torch.isnan(self.positions).any()
+        assert not torch.isnan(self.sh_coefficients_0).any()
+        assert not torch.isnan(self.sh_coefficients_rest).any()
+        assert not torch.isnan(self.rotations).any()
+        assert not torch.isnan(self.scales).any()
+        assert not torch.isnan(self.opacities).any()
+
+        assert not torch.isinf(self.positions).any()
+        assert not torch.isinf(self.sh_coefficients_0).any()
+        assert not torch.isinf(self.sh_coefficients_rest).any()
+        assert not torch.isinf(self.rotations).any()
+        assert not torch.isinf(self.scales).any()
+        assert not torch.isinf(self.opacities).any()
+
+    def calculate_bounding_box(self):
+        """
+        Calculate the bounding box of the GaussianModel.
+        """
+        min_pos = torch.min(self.positions, dim=0).values
+        max_pos = torch.max(self.positions, dim=0).values
+        return BoundingBox(min=min_pos, max=max_pos)

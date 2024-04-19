@@ -6,7 +6,7 @@ This module contains helper functions for mathematical operations.
 """
 
 def inverse_sigmoid(x):
-    return torch.log(x/(1-x))
+    return torch.log(x/(1-x)) # Note: If x=0, this will return -inf. If x=1, this will return nan.
 
 def create_scaled_sigmoid(min: float, max: float) -> Tuple[Callable[[torch.Tensor], torch.Tensor], Callable[[torch.Tensor], torch.Tensor]]:
     """

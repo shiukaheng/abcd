@@ -1,11 +1,16 @@
 
 import time
+from typing import Generic, List, Literal, NamedTuple, Tuple, TypeVar, Union
 import torch
 import viser
 from gs.core.GaussianModel import GaussianModel
 import threading
+from gs.core.View import KnownView
+from gs.geometry.bounding_box import BoundingBox
 from gs.helpers.image import torch_to_numpy
 import threading
+from gs.helpers.transforms import rotmat_to_qvec
+from gs.trainers.grid.GridGaussianModel import GridGaussianCell
 from gs.visualization.helpers import build_camera
 
 global shared_viser
@@ -14,8 +19,70 @@ shared_viser = {
     "viewer": None
 }
 
-class Viewer():
-    def __init__(self, model: GaussianModel, width=1920, frame_rate=15, reuse_viser=True, auto_start=True):
+T = TypeVar('T')
+
+def hsv_to_rgb(h, s, v):
+    # Ensure h, s, v are within the expected range [0, 1]
+    h = h % 1.0  # h values are cyclic [0, 1)
+    i = (h * 6.0).int()
+    f = (h * 6.0) % 1.0
+    
+    w = v * (1.0 - s)
+    q = v * (1.0 - s * f)
+    t = v * (1.0 - s * (1.0 - f))
+    
+    condition_zero = (i == 0)
+    condition_one = (i == 1)
+    condition_two = (i == 2)
+    condition_three = (i == 3)
+    condition_four = (i == 4)
+    condition_five = (i == 5)
+    
+    r = torch.where(condition_zero, v, torch.where(condition_one, q, torch.where(condition_two, w, torch.where(condition_three, w, torch.where(condition_four, t, v)))))
+    g = torch.where(condition_zero, t, torch.where(condition_one, v, torch.where(condition_two, v, torch.where(condition_three, q, torch.where(condition_four, w, w)))))
+    b = torch.where(condition_zero, w, torch.where(condition_one, w, torch.where(condition_two, t, torch.where(condition_three, v, torch.where(condition_four, v, q)))))
+    
+    return torch.stack((r, g, b), dim=0)  # Stack to make the output tensor as (3, h, w)
+
+def false_color_depth(depth: torch.Tensor, alpha: torch.Tensor, range: Union[Literal["auto"], Tuple[float, float]]="auto") -> torch.Tensor:
+    """
+    Map a mono-channel depth image to a spectrum color false-color image
+    """
+    # Use range to normalize depth
+    if range == "auto":
+        min_depth = depth.min().item()
+        max_depth = depth.max().item()
+        if min_depth == max_depth:
+            min_depth = 0
+            max_depth = 1
+    else:
+        min_depth, max_depth = range
+    depth = (depth - min_depth) / (max_depth - min_depth)
+    # Interpret depth as hue, alpha as value.
+    hue = depth
+    saturation = torch.ones_like(hue)
+    value = alpha
+    rgb = hsv_to_rgb(hue, saturation, value).squeeze(1)
+    return rgb
+
+class GroupSceneNodeHandle(NamedTuple):
+    scene_node_handles: List[viser.SceneNodeHandle]
+
+    @property
+    def visible(self):
+        return self.scene_node_handles[0].visible
+    
+    @visible.setter
+    def visible(self, value):
+        for handle in self.scene_node_handles:
+            handle.visible = value
+
+    def remove(self):
+        for handle in self.scene_node_handles:
+            handle.remove()
+
+class Viewer(Generic[T]):
+    def __init__(self, model: GaussianModel, width=1920, frame_rate=15, reuse_viser=True, auto_start=True,):
 
         # Initialize the viewer
         self.model = model
@@ -40,7 +107,7 @@ class Viewer():
         self.width = width # Width of the rendered images
 
         if auto_start:
-            self.start()
+            self.start(threaded=True)
 
         render_channel_switcher = self.viser.add_gui_dropdown("Render channel", ("rgb", "depth", "alpha"))
         def update_render_channel(gui_event: viser.GuiEvent):
@@ -53,8 +120,12 @@ class Viewer():
         """
         for cid, client in self.viser.get_clients().items():
             if cid in renders:
-                client.set_background_image(renders[cid])
+                # Lets not use depth for now. It looks bad.
+                # A single channel depth representation is not informative for volume rendering. It only works when it approximates a 3D surface.
+                # Perhaps there are better representations that Splatfacto is using?
+                client.set_background_image(renders[cid]["display"])
 
+    @torch.no_grad()
     def render_once(self):
         """
         Do a single render pass. Sends the renders on another thread.
@@ -71,13 +142,12 @@ class Viewer():
         for cid, client in clients.items():
             camera = build_camera(client.camera, width=self.width).to(self.model.positions.device)
             render, depth, alpha = self.model.forward(camera)
-            render: torch.Tensor = render.detach().cpu()
+            render = render.detach().cpu()
             # We need to normalize depth and convert to 3 channels for visualization
-            depth: torch.Tensor = depth.detach().cpu()
-            depth = 1 - (depth / 5.).clamp(0, 1)
-            depth = depth.repeat(1, 3, 1, 1)
+            depth_raw = depth.detach().cpu()
+            depth = false_color_depth(depth, alpha).detach().cpu()
             # We need to convert alpha to 3 channels for visualization
-            alpha: torch.Tensor = alpha.detach().cpu().repeat(1, 3, 1, 1)
+            alpha = alpha.detach().cpu().repeat(1, 3, 1, 1)
             channels = { "rgb": render, "depth": depth, "alpha": alpha }
 
             # Get channel to display
@@ -85,7 +155,10 @@ class Viewer():
                 self.render_channel[cid] = "rgb"
             else:
                 self.render_channel[cid] = self.render_channel[cid]
-            output[cid] = torch_to_numpy(channels[self.render_channel[cid]]) # Send the render to the client
+            output[cid] = {
+                "display": torch_to_numpy(channels[self.render_channel[cid]]),
+                "depth": torch_to_numpy(depth_raw)
+            } # Send the render to the client
             del camera
         self.render_once_thread = threading.Thread(target=self._send_renders, args=(output,))
         self.render_once_thread.start()
@@ -128,3 +201,71 @@ class Viewer():
         self.render_thread.join()
         if stop_viser:
             self.viser.stop()
+
+    def add_camera(self, camera: KnownView[T], camera_scale=0.3, color=(0, 0, 1), show_image=True):
+        """
+        Add camera to the viewer
+        """
+        name = f"/cameras/{camera.id}/frustum"
+        return self.viser.add_camera_frustum(
+            name,
+            camera.fov_y,
+            camera.aspect_ratio,
+            camera_scale,
+            color,
+            torch_to_numpy(camera.image) if show_image else None,
+            "jpeg",
+            jpeg_quality=None,
+            wxyz=rotmat_to_qvec(camera.R),
+            position=camera.center,
+        )
+    
+    def add_cell_bounary(self, cell: GridGaussianCell, color=(1, 1, 1), thickness=0.01):
+        """
+        Add bounding box to the viewer
+        """
+        name = f"/bounding_boxes/{cell.index.to_string_id()}"
+        # Unfortuately Viser does not support creating 3D wireframe boxes. We can instead use 6 1x1 grid planes to represent the bounding box
+        grid_args = []
+        # Iterate over all faces
+        orientations = ["xz", "xy", "yx", "yz", "zx", "zy"]
+        for i in range(6):
+            axis = i // 2
+            direction = i % 2
+            # Convert axis and direction to quaternion
+            quaternion = [0,0,0,0]
+            quaternion[axis] = 1
+            quaternion[3] = direction
+            quaternion = tuple(quaternion)
+            center = cell.center
+            center[axis] += (cell.grid.grid_size * (1 if direction == 0 else -1)) / 2
+            # Add grid plane
+            grid_args.append({
+                "name": f"{name}/{i}",
+                "width": cell.grid.grid_size,
+                "height": cell.grid.grid_size,
+                "width_segments": 1,
+                "height_segments": 1,
+                "plane": orientations[i],
+                "cell_color": color,
+                "cell_thickness": thickness,
+                "cell_size": 1,
+                "section_color": color,
+                "section_thickness": thickness,
+                "section_size": 1,
+                "wxyz": quaternion,
+                "position": center
+            })
+        return GroupSceneNodeHandle([
+            self.viser.add_grid(**args) for args in grid_args
+        ])
+        
+        
+
+
+
+
+
+
+
+

@@ -1,7 +1,7 @@
 import math
 import numpy as np
 import viser
-from gs.core.BaseCamera import BaseCamera
+from gs.core.View import ViewWithRes
 
 def quaternion_to_rotation_matrix(q):
     """Convert a quaternion into a rotation matrix."""
@@ -28,11 +28,6 @@ def build_camera(camera: viser.CameraHandle, width=1920):
 
     R, t = convert_viser_to_colmap(camera.position, camera.wxyz)
 
-    return BaseCamera(
-        height,
-        width,
-        horiz_fov,
-        vert_fov,
-        R,
-        t
+    return ViewWithRes(
+        R, t, horiz_fov, vert_fov, height, width
     )

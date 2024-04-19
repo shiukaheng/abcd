@@ -3,7 +3,7 @@ import numpy as np
 import torch
 from typing import TYPE_CHECKING 
 if TYPE_CHECKING:
-    from gs.core.BaseCamera import BaseCamera
+    from gs.core.View import View
 
 """
 This module contains helper functions for 3D transformations.
@@ -203,20 +203,6 @@ def get_world_to_view(R: np.ndarray, t: np.ndarray, translate=np.array([.0, .0, 
     C2W[:3, 3] = cam_center
     Rt = np.linalg.inv(C2W)
     return np.float32(Rt)
-
-def get_camera_center(camera: 'BaseCamera'):
-    """
-    Get camera center in world coordinates.
-    """
-    R, t = camera.R, camera.t
-    Rt = np.zeros((4, 4))
-    Rt[:3, :3] = R.transpose()
-    Rt[:3, 3] = t
-    Rt[3, 3] = 1.0
-
-    C2W = np.linalg.inv(Rt)
-    cam_center = C2W[:3, 3]
-    return torch.tensor(cam_center)
 
 def get_projection_matrix(znear, zfar, fovX, fovY):
     tanHalfFovY = math.tan((fovY / 2))

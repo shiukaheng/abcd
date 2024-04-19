@@ -43,11 +43,11 @@ for i in range(5000):
 The codebase is structured as follows:
 - `gs/`: The Gaussian splatting module.
     - `core/`: Core data structures and functions for rendering 3DGS models
-        - `BaseCamera.py`: Base class that represents a camera used for training 3DGS models
+        - `BaseCamera.py`: Base class that represents a camera used for training 3DGS models [TODO: OUTDATED]
         - `BasePointCloud.py`: Base class for point clouds used for initializing 3DGS models
         - `GaussianModel.py`: 3DGS model refactored as a nn.Module. Use `forward` with a camera to render the model
     - `io/`: Functions for importing and exporting image and point cloud data
-        - `colmap/`: Functions for importing COLMAP reconstructions into `BaseCamera` and `BasePointCloud` compliant objects
+        - `colmap/`: Functions for importing COLMAP reconstructions into `BaseCamera` and `BasePointCloud` compliant objects [TODO: OUTDATED]
     - `trainers/`: Training scripts for 3DGS models
         - `basic/`: Re-implementations of the original training script
     - `visualization/`: Classes for visualizing 3DGS models
