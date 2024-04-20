@@ -16,7 +16,6 @@ class BasicTrainConfig:
     scales_lr: float = 0.005
     opacities_lr: float = 0.05
     sh_coefficients_lr: float = 0.0025
-    sh_mlp_lr: Union[float, None] = None # If None, the MLP is not used.
     model_train_device: Union[str, None] = "cuda"
     model_store_device: Union[str, None] = "cpu"
     camera_train_device: Union[str, None] = "cuda"

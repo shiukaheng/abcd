@@ -27,7 +27,6 @@ output_model = train(
         densify_interval=100,
         # scales_lr=0.01,
         densify_from_iter=200,
-        sh_mlp_lr=0.05,
         transparency_loss_weight=1,
         split_n_samples=4,
         split_shrink_factor=0.7,

@@ -7,72 +7,13 @@ from torch import nn
 from gs.core.View import View, ViewWithRes
 from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
 from gs.core.BasePointCloud import BasePointCloud
-from gs.embedding.sinusoidal_embedding import SinusoidalEncoding
 from gs.geometry.bounding_box import BoundingBox
 from gs.helpers.math import create_scaled_sigmoid, inverse_sigmoid
-from gs.helpers.spherical_harmonics import rgb_to_sh
 from gs.helpers.path import mkdir_p
+from gs.helpers.spherical_harmonics import rgb_to_sh
 from gs.helpers.transforms import build_covariance_from_scaling_rotation
 from simple_knn._C import distCUDA2
 from plyfile import PlyData, PlyElement
-
-class SphericalHarmonicsMLP(nn.Module):
-    def __init__(self, num_sh_coefficients: int, num_sh_channels: int, num_sin_kernels: int = None):
-        # Num SH coefficients: Number of spherical harmonics coefficients to process
-        # Num SH channels: Number of channels in each spherical harmonics coefficient (3 for RGB)
-        # Num positional channels: Number of channels for positional encoding, we default to 10
-        super().__init__()
-        self.num_sh_coefficients = num_sh_coefficients
-        self.num_sh_channels = num_sh_channels
-        if num_sin_kernels is not None:
-            self.pose_encoding = SinusoidalEncoding(6, num_sin_kernels) # (x, y, z, look_at_x, look_at_y, look_at_z) for input
-            self.mlp = nn.Sequential(
-                nn.Linear(num_sh_coefficients * num_sh_channels + num_sin_kernels, 256),
-                nn.ReLU(),
-                nn.Linear(256, 256),
-                nn.ReLU(),
-                nn.Linear(256, num_sh_coefficients * num_sh_channels),
-            )
-        else:
-            self.pose_encoding = None
-            self.mlp = nn.Sequential(
-                nn.Linear(num_sh_coefficients * num_sh_channels + 6, 256), # (x, y, z, look_at_x, look_at_y, look_at_z) for input
-                nn.ReLU(),
-                nn.Linear(256, 256),
-                nn.ReLU(),
-                nn.Linear(256, num_sh_coefficients * num_sh_channels),
-            )
-        # Zero-initialize the weights of the last layer
-        self.mlp[-1].weight.data.zero_()
-        self.mlp[-1].bias.data.zero_()
-    
-    def forward(self, in_sh_coefficients: torch.Tensor, camera: View) -> torch.Tensor:
-        """
-        Apply the MLP to the model sh_coefficients based on a camera position in a residual fashion.
-        """
-        center = camera.center.to(in_sh_coefficients.device)
-        look_at = camera.look_at.to(in_sh_coefficients.device)
-        if self.pose_encoding is not None:
-            # Apply positional encoding to camera position
-            camera_pose = torch.cat([center, look_at], dim=0).unsqueeze(0)
-            camera_position_encoded = self.pose_encoding.forward(camera_pose) # (1, num_positional_channels)
-            camera_position_encoded = camera_position_encoded.expand(in_sh_coefficients.shape[0], -1) # (N, num_positional_channels)
-            # Flatten sh_coefficients
-            sh_coefficients = in_sh_coefficients.view(in_sh_coefficients.shape[0], -1)
-            # Concatenate sh_coefficients and camera_position
-            input = torch.cat([sh_coefficients, camera_position_encoded], dim=1)
-        else:
-            # Apply positional encoding to camera position
-            camera_position_encoded = torch.cat([center, look_at], dim=0).unsqueeze(0).expand(in_sh_coefficients.shape[0], -1)
-            # Flatten sh_coefficients
-            sh_coefficients = in_sh_coefficients.view(in_sh_coefficients.shape[0], -1)
-            # Concatenate sh_coefficients and camera_position
-            input = torch.cat([sh_coefficients, camera_position_encoded], dim=1)
-        # Apply MLP
-        output = self.mlp(input)
-        # Reshape output to match the shape of sh_coefficients, and add it to sh_coefficients
-        output = output.view(in_sh_coefficients.shape)
-        return in_sh_coefficients + output
 
 class GaussianModel(nn.Module):
     """
@@ -112,7 +53,6 @@ class GaussianModel(nn.Module):
         # min_scale: float=0.0001, # Minimum scale for sigmoid
         # max_scale: float=0.05, # Maximum scale for sigmoid
         scales_range: Union[Tuple[float, float], None] = None, # Minimum and maximum scale for sigmoid
-        use_camera_aware_appearance: bool=True, # Whether to use camera-aware appearance modelling
     ):
         super().__init__()
         # Gaussian parameters defining geometry and appearance to be optimized.
@@ -145,15 +85,6 @@ class GaussianModel(nn.Module):
         self.register_buffer("_gradient_accumulator", _gradient_accumulator, persistent=True)
         self.register_buffer("_gradient_accumulator_denominator", _gradient_accumulator_denominator, persistent=True)
         self.register_buffer("max_radii2D", max_radii2D, persistent=True)
-
-        # Camera aware appearance modelling
-        self.use_camera_aware_appearance = use_camera_aware_appearance
-        # We create an MLP to modify the sh_coefficients, based on the camera position
-        # We will apply the MLP in a residual fashion. Thus, we initialize the MLP with zeros.
-        if use_camera_aware_appearance:
-            self.sh_mlp = SphericalHarmonicsMLP(
-                num_sh_coefficients=sh_coefficients.shape[1], 
-                num_sh_channels=sh_coefficients.shape[2])
 
         self.radii = None
     
@@ -196,12 +127,10 @@ class GaussianModel(nn.Module):
         # Render Gaussians using rasterizer
         rasterizer = GaussianRasterizer(raster_settings=raster_settings)
 
-        shs = self.sh_mlp.forward(self.sh_coefficients, camera) if self.use_camera_aware_appearance else self.sh_coefficients
-
         rendered_image, self.radii, depth, alpha = rasterizer(
             means3D=self.positions,
             means2D=self.viewspace_points,
-            shs=shs,
+            shs=self.sh_coefficients,
             opacities=self.opacities_activation(self.opacities),
             scales=self.scales_activation(self.scales),
             rotations=self.rotations_activation(self.rotations),
@@ -254,7 +183,6 @@ class GaussianModel(nn.Module):
         background_color: torch.Tensor=torch.tensor([0, 0, 0], dtype=torch.float32), 
         constant_scale: float=None, 
         scales_range: Union[Tuple[float, float], None]=None,
-        use_camera_aware_appearance: bool=True
         ):
         """
         Create GaussianModel from PointCloud. This is useful for converting PointClouds to GaussianModels, which can be rendered using rasterizer.
@@ -299,8 +227,7 @@ class GaussianModel(nn.Module):
             opacities=opacities,
             sh_degree=sh_degree,
             background_color=background_color,
-            scales_range=scales_range,
-            use_camera_aware_appearance=use_camera_aware_appearance
+            scales_range=scales_range
         )
     
     # Convenience functions
@@ -316,8 +243,7 @@ class GaussianModel(nn.Module):
             scales=self.scales.clone(),
             opacities=self.opacities.clone(),
             sh_degree=self.sh_degree,
-            background_color=self.background_color.clone(),
-            use_camera_aware_appearance=self.use_camera_aware_appearance
+            background_color=self.background_color.clone()
         )
     
     def __len__(self):
@@ -344,12 +270,8 @@ class GaussianModel(nn.Module):
                 opacities=new_opacities,
                 sh_degree=self.sh_degree,
                 background_color=self.background_color,
-                scales_range=self.scales_range,
-                use_camera_aware_appearance=self.use_camera_aware_appearance
+                scales_range=self.scales_range
             )
-
-            if self.use_camera_aware_appearance: # Copy the sh_mlp if it exists.
-                new_model.sh_mlp = self.sh_mlp
 
             return new_model
         else:

@@ -51,11 +51,6 @@ def train(
         {"params": [model.sh_coefficients_0], "lr": c.sh_coefficients_lr, "name": "sh_coefficients_0"},
         {"params": [model.sh_coefficients_rest], "lr": c.sh_coefficients_lr / 20.0, "name": "sh_coefficients_rest"},
     ]
-
-    if c.sh_mlp_lr is not None:
-        lr_groups += [
-            {"params": model.sh_mlp.parameters(), "lr": c.sh_mlp_lr, "name": "sh_mlp"},
-        ]
     
     # With all this set, we can define the optimizer.
     optimizer = torch.optim.Adam(lr_groups, lr=0.0, eps=1e-15)
