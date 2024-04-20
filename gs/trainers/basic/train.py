@@ -3,8 +3,10 @@ import time
 from typing import List, Union
 import torch
 from tqdm import tqdm
+from traitlets import Bool
 from gs.core.View import KnownView
 from gs.core.GaussianModel import GaussianModel
+from gs.embedding.spherical_harmonics_mlp import SphericalHarmonicsMLP
 from gs.helpers.formatting import format_number
 from gs.helpers.image import torch_to_cv2, torch_to_numpy, torch_to_pil
 from gs.helpers.loss import mix_l1_ssim_loss
@@ -20,11 +22,26 @@ def train(
         model: GaussianModel,
         cameras: List[KnownView],
         c: BasicTrainConfig,
-        _viewer: Union[None, Viewer] = None # If this training loop is chained with another, we can pass the viewer to avoid creating a new one.
+        _viewer: Union[None, Viewer] = None, # If this training loop is chained with another, we can pass the viewer to avoid creating a new one.
     ):
     """
     This is the most basic trainer for Gaussian splatting. It mirrors the original training logic.
     """
+
+    if c.sh_mlp is True:
+        # We will have to create a new SH MLP
+        sh_mlp = SphericalHarmonicsMLP(model.sh_coefficients.shape[1], model.sh_coefficients.shape[2], cameras)
+    elif c.sh_mlp is False:
+        # We will not use an SH MLP
+        sh_mlp = None
+    elif isinstance(c.sh_mlp, SphericalHarmonicsMLP):
+        # We will use the given SH MLP
+        sh_mlp = c.sh_mlp
+    else:
+        raise ValueError(f"Invalid value for sh_mlp: {sh_mlp}, expected bool or SphericalHarmonicsMLP")
+    
+    if sh_mlp is not None:
+        model.sh_mlp = sh_mlp
 
     if c.model_train_device is not None:
         model.to(c.model_train_device)
@@ -52,7 +69,7 @@ def train(
         {"params": [model.sh_coefficients_rest], "lr": c.sh_coefficients_lr / 20.0, "name": "sh_coefficients_rest"},
     ]
 
-    if c.sh_mlp_lr is not None:
+    if sh_mlp is not None:
         lr_groups += [
             {"params": model.sh_mlp.parameters(), "lr": c.sh_mlp_lr, "name": "sh_mlp"},
         ]

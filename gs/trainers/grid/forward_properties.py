@@ -24,7 +24,6 @@ GAUSSIAN_MODEL_PROPERTIES = [
     "_gradient_accumulator_denominator",
     "max_radii2D",
     "sh_mlp",
-    "use_camera_aware_appearance",
 ]
 
 
