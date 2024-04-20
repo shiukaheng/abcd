@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Union
+from typing import Literal, Union
 
 from gs.core.View import KnownView
 
@@ -36,7 +36,7 @@ class BasicTrainConfig:
     max_gaussians: Union[int, None] = None
     starting_iter: int = 0
     ending_iter: Union[int, None] = None
-    preview_camera: Union[KnownView, None] = None
+    preview_camera: Union[KnownView, Literal["all"], None] = None
     transparency_loss_weight: float = 0.0
     split_n_samples: int = 2
     split_shrink_factor: float = 0.8

@@ -119,11 +119,13 @@ def train(
 
         # Show rendered image as its training
         if c.preview_camera is not None:
-            with torch.no_grad():
-                c.preview_camera.to(c.camera_train_device)
-                preview_render, _, _ = model.forward(c.preview_camera, active_sh_degree=active_sh_degree)
-                cv2.imshow('Rendered', torch_to_cv2(preview_render.detach().cpu()))
-                cv2.waitKey(5)
+            if c.preview_camera == "all" or c.preview_camera == camera.id:
+                show_image(rendered)
+            else:
+                with torch.no_grad():
+                    c.preview_camera.to(c.camera_train_device)
+                    preview_render, _, _ = model.forward(c.preview_camera, active_sh_degree=active_sh_degree)
+                    show_image(preview_render)
 
         if c.camera_store_device is not None:
             camera.to(c.camera_store_device)
@@ -161,3 +163,7 @@ def train(
                 print("Max Gaussians reached")
 
     return model
+
+def show_image(preview_render):
+    cv2.imshow('Rendered', torch_to_cv2(preview_render.detach().cpu()))
+    cv2.waitKey(5)
