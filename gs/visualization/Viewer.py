@@ -52,8 +52,9 @@ def false_color_depth(depth: torch.Tensor, alpha: torch.Tensor, range: Union[Lit
     """
     # Use range to normalize depth
     if range == "auto":
-        min_depth = depth.min().item()
+        # Mean depth, weighted by alpha
         max_depth = depth.max().item()
+        min_depth = (depth * alpha + (1 - alpha) * max_depth).min().item()
         if min_depth == max_depth:
             min_depth = 0
             max_depth = 1

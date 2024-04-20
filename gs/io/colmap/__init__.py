@@ -61,7 +61,7 @@ def load_cameras(path: str) -> List[COLMAPView]:
         fov_x, fov_y = get_fov(intrinsics)
         image_path = os.path.join(images_folder, os.path.basename(extrinsics.name))
         # replace .arw with .jpg (hack)
-        image_path = image_path.replace(".arw", ".jpg")
+        image_path = image_path.replace(".arw", ".jpg").replace(".rd", ".jpg")
         with warnings.catch_warnings(): # Suppress EXIF warnings .. "Corrupt EXIF data"
             warnings.simplefilter("ignore")
             pil_image = Image.open(image_path)
