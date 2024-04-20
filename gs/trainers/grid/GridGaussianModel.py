@@ -142,6 +142,7 @@ class GridGaussianModel(Generic[T]): # T represents the type of the camera ID
         Create a GridGaussianModel from a single Gaussian model.
         """
         cells = split_to_grid_gaussian_cells(input_model, grid, min_gaussians=min_gaussians)
+        print(f"Split model into {len(cells)} cells")
         return GridGaussianModel(cells, cameras, grid, model_store_device, model_train_device, default_extra_cell_compensation)
 
     def grid_get(self, index: GridIndex) -> GaussianModel:
@@ -175,6 +176,7 @@ class GridGaussianModel(Generic[T]): # T represents the type of the camera ID
         # Move the active cell to the training device, and the rest to the storage device
         for i, cell in self.grid_cells.items():
             if i == index:
+                # print(f"Moving cell {i} to training device")
                 cell.model.to(self.grid_model_train_device)
             else:
                 cell.model.to(self.grid_model_store_device)
@@ -242,10 +244,12 @@ class GridGaussianModel(Generic[T]): # T represents the type of the camera ID
         """
         if self._active_cell_index is None:
             raise ValueError("No active cell is set.")
+        # Print the cell's param groups
         # For each camera that can see the active cell, we render the cell and save the view snapshot, save to the active cell's view snapshots
         with torch.no_grad():
             cameras = self.grid_get_visible_cameras_from_cell(self._active_cell_index)
             for camera in cameras:
+                # self.grid_active_cell.model.to(self.grid_model_train_device) # Move the active cell to the training device # WHY IS THIS NEEDED?
                 camera.to(self.grid_model_train_device) # Move the camera to the training device
                 rgb, depth, alpha = self.grid_active_cell.model.forward(camera)
                 camera.to(self.grid_model_store_device) # Move the camera back to the storage device (if it was not already there

@@ -36,8 +36,6 @@ def train(
         viewer = _viewer
     viewer.set_model(model)
 
-    time.sleep(10) # We give the viewer some time to start.
-
     # We estimate the scene size, such that a larger scene will have a larger learning rate. It is a heuristic defined in the original code.
     if c.scene_scale is None:
         scene_scale = estimate_scene_scale(cameras).item()
@@ -135,7 +133,7 @@ def train(
             # Densification and culling
             if c.densify_from_iter < i < c.densify_until_iter and not (max_memory_reached or max_gaussians_reached):
                 if i % c.densify_interval == 0:
-                    densify(model, optimizer, scene_scale, c.densify_grad_threshold)
+                    densify(model, optimizer, scene_scale, c.densify_grad_threshold, split_n_samples=c.split_n_samples, split_shrink_factor=c.split_shrink_factor)
                     if i > c.opacity_reset_interval:
                         prune(model, optimizer, scene_scale, c.opacity_threshold, c.screen_size_threshold, c.world_size_threshold_multiplier)
                     else:

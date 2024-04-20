@@ -27,12 +27,27 @@ def train(
 
     # Split model into grid on its original device
     model.to(c.model_store_device)
-    grid_model = GridGaussianModel.from_gaussian_model(model, cameras, c.grid, c.model_store_device, c.model_train_device, min_gaussians=c.min_gaussians, default_extra_cell_compensation=c.extra_cell_compensation)
+    grid_model = GridGaussianModel.from_gaussian_model(
+        model, 
+        cameras, 
+        c.grid, 
+        c.model_store_device, 
+        c.model_train_device, 
+        min_gaussians=c.min_gaussians, 
+        default_extra_cell_compensation=c.extra_cell_compensation
+    )
 
     # We train each cell in the grid for sync_interval iterations
     while all(cell.current_iter < c.iterations for cell in grid_model.grid_iter()): # While there are cells that have not reached the target iteration
+        cells = list(grid_model.grid_iter())
+        if len(cells) == 0:
+            raise ValueError("Cell filtering criteria is too strict, no cells left to train")
+        filtered_cells = list(filter(lambda cell: cell.current_iter < c.iterations, cells))
+        if len(filtered_cells) == 0:
+            print("All cells have reached the target iteration")
+            break
 
-        for cell in filter(lambda cell: cell.current_iter < c.iterations, grid_model.grid_iter()): # For each cell that has not reached the target iteration
+        for cell in filtered_cells: # For each cell that has not reached the target iteration
 
             print(f"Training cell {cell.index} for {c.sync_interval} iterations")
 
@@ -61,7 +76,9 @@ def train(
             # Pre-render the cell if required
             if c.extra_cell_compensation != "disabled":
                 if c.extra_cell_compensation == "last":
+                    # print(f"Culling cell {cell.index} for {c.sync_interval} iterations")
                     grid_model.grid_cull_active_cell_prerenders(target_iteration)
+                # print(f"Prerendering cell {cell.index} for {c.sync_interval} iterations")
                 grid_model.grid_prerender_active_cell(target_iteration)
 
             # Update the cell to notifiy that it has been trained

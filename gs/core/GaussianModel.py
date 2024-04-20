@@ -50,9 +50,11 @@ class SphericalHarmonicsMLP(nn.Module):
         """
         Apply the MLP to the model sh_coefficients based on a camera position in a residual fashion.
         """
+        center = camera.center.to(in_sh_coefficients.device)
+        look_at = camera.look_at.to(in_sh_coefficients.device)
         if self.pose_encoding is not None:
             # Apply positional encoding to camera position
-            camera_pose = torch.cat([camera.center, camera.look_at], dim=0).unsqueeze(0)
+            camera_pose = torch.cat([center, look_at], dim=0).unsqueeze(0)
             camera_position_encoded = self.pose_encoding.forward(camera_pose) # (1, num_positional_channels)
             camera_position_encoded = camera_position_encoded.expand(in_sh_coefficients.shape[0], -1) # (N, num_positional_channels)
             # Flatten sh_coefficients
@@ -61,7 +63,7 @@ class SphericalHarmonicsMLP(nn.Module):
             input = torch.cat([sh_coefficients, camera_position_encoded], dim=1)
         else:
             # Apply positional encoding to camera position
-            camera_position_encoded = torch.cat([camera.center, camera.look_at], dim=0).unsqueeze(0).expand(in_sh_coefficients.shape[0], -1)
+            camera_position_encoded = torch.cat([center, look_at], dim=0).unsqueeze(0).expand(in_sh_coefficients.shape[0], -1)
             # Flatten sh_coefficients
             sh_coefficients = in_sh_coefficients.view(in_sh_coefficients.shape[0], -1)
             # Concatenate sh_coefficients and camera_position
@@ -71,7 +73,6 @@ class SphericalHarmonicsMLP(nn.Module):
         # Reshape output to match the shape of sh_coefficients, and add it to sh_coefficients
         output = output.view(in_sh_coefficients.shape)
         return in_sh_coefficients + output
-        
 
 class GaussianModel(nn.Module):
     """
@@ -111,7 +112,6 @@ class GaussianModel(nn.Module):
         # min_scale: float=0.0001, # Minimum scale for sigmoid
         # max_scale: float=0.05, # Maximum scale for sigmoid
         scales_range: Union[Tuple[float, float], None] = None, # Minimum and maximum scale for sigmoid
-        positional_encoding_channels: int=10, # Number of channels for positional encoding
         use_camera_aware_appearance: bool=True, # Whether to use camera-aware appearance modelling
     ):
         super().__init__()
@@ -248,7 +248,14 @@ class GaussianModel(nn.Module):
         return m
     
     @staticmethod
-    def from_point_cloud(pointcloud: BasePointCloud, sh_degree: int=3, background_color: torch.Tensor=torch.tensor([0, 0, 0], dtype=torch.float32), constant_scale: float=None, scales_range: Union[Tuple[float, float], None]=None):
+    def from_point_cloud(
+        pointcloud: BasePointCloud, 
+        sh_degree: int=3, 
+        background_color: torch.Tensor=torch.tensor([0, 0, 0], dtype=torch.float32), 
+        constant_scale: float=None, 
+        scales_range: Union[Tuple[float, float], None]=None,
+        use_camera_aware_appearance: bool=True
+        ):
         """
         Create GaussianModel from PointCloud. This is useful for converting PointClouds to GaussianModels, which can be rendered using rasterizer.
         """
@@ -292,7 +299,8 @@ class GaussianModel(nn.Module):
             opacities=opacities,
             sh_degree=sh_degree,
             background_color=background_color,
-            scales_range=scales_range
+            scales_range=scales_range,
+            use_camera_aware_appearance=use_camera_aware_appearance
         )
     
     # Convenience functions
@@ -308,7 +316,8 @@ class GaussianModel(nn.Module):
             scales=self.scales.clone(),
             opacities=self.opacities.clone(),
             sh_degree=self.sh_degree,
-            background_color=self.background_color.clone()
+            background_color=self.background_color.clone(),
+            use_camera_aware_appearance=self.use_camera_aware_appearance
         )
     
     def __len__(self):
@@ -327,7 +336,7 @@ class GaussianModel(nn.Module):
             new_scales = self.scales[idx]
             new_opacities = self.opacities[idx]
 
-            return GaussianModel(
+            new_model = GaussianModel(
                 positions=new_positions,
                 sh_coefficients=torch.cat([new_sh_coefficients_0, new_sh_coefficients_rest], dim=1),
                 rotations=new_rotations,
@@ -335,8 +344,14 @@ class GaussianModel(nn.Module):
                 opacities=new_opacities,
                 sh_degree=self.sh_degree,
                 background_color=self.background_color,
-                scales_range=self.scales_range
+                scales_range=self.scales_range,
+                use_camera_aware_appearance=self.use_camera_aware_appearance
             )
+
+            if self.use_camera_aware_appearance: # Copy the sh_mlp if it exists.
+                new_model.sh_mlp = self.sh_mlp
+
+            return new_model
         else:
             raise TypeError("Indexing with type {} not supported".format(type(idx)))
         

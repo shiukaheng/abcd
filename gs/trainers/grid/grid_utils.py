@@ -19,6 +19,7 @@ def split_model(model: GaussianModel, grid: Grid, min_gaussians: int) -> Dict[Gr
     """
     Splits a Gaussian model into a grid of cells.
     """
+    max_gaussians = 0
     model_bounding_box = model.calculate_bounding_box()
     cells = grid.calculate_bounding_box_cells(model_bounding_box) # Get the cells that are inside the bounding box
     cell_models = {}
@@ -27,6 +28,9 @@ def split_model(model: GaussianModel, grid: Grid, min_gaussians: int) -> Dict[Gr
         if len(cell_model) < min_gaussians:
             continue
         cell_models[cell_index]=(cell_model, cell_bounding_box)
+        max_gaussians = max(max_gaussians, len(cell_model))
+    if len(cell_models) == 0:
+        raise ValueError(f"No cells with at least {min_gaussians} Gaussians. The maximum number of Gaussians in a cell is {max_gaussians}")
     return cell_models
 
 def merge_model(models: List[Tuple[GaussianModel, BoundingBox]], device, clean=True) -> GaussianModel:

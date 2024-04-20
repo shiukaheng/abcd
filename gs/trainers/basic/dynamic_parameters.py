@@ -8,7 +8,16 @@ This module contains helper functions for densifying and pruning Gaussian models
 These are not class methods for GaussianModel since it requires direct access to the optimizer.
 """
 
-def densify(model: GaussianModel, optimizer: torch.optim.Adam, scene_scale: float, gradient_threshold: float, percent_dense: float = 0.01, safety_margin_factor=0.05) -> None:
+def densify(
+        model: GaussianModel, 
+        optimizer: torch.optim.Adam, 
+        scene_scale: float, 
+        gradient_threshold: float, 
+        percent_dense: float = 0.01, 
+        safety_margin_factor=0.05, 
+        split_n_samples: int=2,
+        split_shrink_factor: float=0.8
+        ) -> None:
     """
     Densifies the Gaussian model by cloning and splitting Gaussians based on the gradient magnitude and the size of the Gaussian.
     """
@@ -17,8 +26,7 @@ def densify(model: GaussianModel, optimizer: torch.optim.Adam, scene_scale: floa
     if model.scales_range is None:
         large_gaussian_mask = (torch.max(model.scales_activation(model.scales), dim=1).values > percent_dense * scene_scale)
     else:
-        # 90% of upper limit is defined as large
-        large_gaussian_mask = (torch.max(model.scales_activation(model.scales), dim=1).values > model.scales_range[1] * 0.9)
+        large_gaussian_mask = (torch.max(model.scales_activation(model.scales), dim=1).values > model.scales_range[1] * 0.75)
     clone_mask = torch.logical_and(exceed_gradient_mask, ~large_gaussian_mask)
     clone_gaussians(model, optimizer, clone_mask)
     if model.scales_range is None:
@@ -27,7 +35,7 @@ def densify(model: GaussianModel, optimizer: torch.optim.Adam, scene_scale: floa
         # Split if exceeding 90% of the upper limit regardless of gradient
         split_mask = large_gaussian_mask
     padded_split_mask = pad_mask(split_mask, model, model.positions.device)
-    split_gaussians(model, optimizer, padded_split_mask, safety_margin_factor=safety_margin_factor)
+    split_gaussians(model, optimizer, padded_split_mask, safety_margin_factor=safety_margin_factor, n_samples=split_n_samples, split_shrink_factor=split_shrink_factor)
 
 def prune(model: GaussianModel, optimizer: torch.optim.Adam, scene_scale: float, opacity_threshold: float, screen_size_threshold: float, world_size_threshold_multiplier: float = 0.1) -> None:
     """
@@ -148,7 +156,8 @@ def split_gaussians(
         optimizer: torch.optim.Adam,
         mask: torch.Tensor,
         n_samples: int = 2,
-        safety_margin_factor: float = 0.05
+        safety_margin_factor: float = 0.05,
+        split_shrink_factor: float = 0.8
     ) -> None:
     """
     Splits Gaussians based on a mask.
@@ -173,14 +182,14 @@ def split_gaussians(
     new_rotations = rotations.repeat(n_samples, 1)
     if model.scales_range is None:
         new_scales = model.scales_inverse_activation(
-            model.scales_activation(scales).repeat(n_samples, 1) / (0.8 * n_samples)
+            model.scales_activation(scales).repeat(n_samples, 1) / (split_shrink_factor * n_samples)
         )
     else:
         scale_range = model.scales_range[1] - model.scales_range[0]
         safety_margin = scale_range * safety_margin_factor
         new_scales = model.scales_inverse_activation(
             torch.clamp(
-                model.scales_activation(scales).repeat(n_samples, 1) / (0.8 * n_samples),
+                model.scales_activation(scales).repeat(n_samples, 1) / (split_shrink_factor * n_samples),
                 model.scales_range[0] + safety_margin,
                 model.scales_range[1] - safety_margin
             )
