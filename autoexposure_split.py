@@ -26,19 +26,19 @@ output_model = train(
     input_model, 
     cameras, 
     GridTrainConfig(
-        grid=Grid(15, 
-        grid_origin=torch.Tensor([0,0,0])), 
+        grid=Grid(
+            20, 
+            grid_origin=torch.Tensor([0,0,0])
+        ), 
         sync_interval=250,
         extra_cell_compensation="last",
         min_gaussians=100,
-        preview_camera=cameras[10],
-
         iterations=20000,
         densify_until_iter=15000,
         densify_interval=100,
         scales_lr=0.01,
         densify_from_iter=200,
-        # sh_mlp_lr=0.005,
+        sh_mlp_lr=0.005,
         transparency_loss_weight=0.1,
         split_n_samples=4,
         split_shrink_factor=0.7,
