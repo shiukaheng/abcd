@@ -57,6 +57,5 @@ def merge_model(models: List[Tuple[GaussianModel, BoundingBox]], device, clean=T
     elif len(models) == 1:
         return models[0][0]
     else:
-        models[0][0].concatenate([model for model, _ in models[1:]])
-        return models[0][0]
+        return GaussianModel.concatenate([model for model, _ in models])
     

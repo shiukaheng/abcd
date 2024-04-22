@@ -292,7 +292,7 @@ class GaussianModel(nn.Module):
         self.opacities[idx] = new_model.opacities
 
     @staticmethod
-    def concatenate(*models: "GaussianModel"):
+    def concatenate(models: List["GaussianModel"]):
         """
         Concatenates multiple GaussianModel instances into a single model.
         """
@@ -325,7 +325,7 @@ class GaussianModel(nn.Module):
         )
         return new_model
     
-    def concatenate(self, models: List["GaussianModel"]):
+    def append(self, models: List["GaussianModel"]):
         """
         Concatenates multiple GaussianModel instances into the current model.
         """
