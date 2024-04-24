@@ -172,3 +172,4 @@ output/
 !.devcontainer/.pip-cache/README.md
 
 samples/
+*.ply
