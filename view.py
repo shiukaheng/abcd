@@ -12,6 +12,7 @@ def main():
     # Load the model
     model = GaussianModel.from_ply(args.file)
     model.cuda()
+    model.save_ply("./fixed.ply")
 
     # Create a viewer
     viewer = Viewer(auto_start=False)

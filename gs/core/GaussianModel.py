@@ -370,7 +370,11 @@ class GaussianModel(nn.Module):
         positions = self.positions.detach().cpu().numpy()
         normals = np.zeros_like(positions)
         rotations = self.rotations.detach().cpu().numpy()
-        scales = self.scales.detach().cpu().numpy()
+        if self.scales_range is not None: # Reparameterize to use exponential activation
+            scales = torch.log(self.scales_inverse_activation(self.scales))
+        else:
+            scales = self.scales
+        scales = scales.detach().cpu().numpy()
         opacities = self.opacities.detach().cpu().numpy()
         sh_coefficients_0 = self.sh_coefficients_0.detach().cpu().squeeze(1).numpy()
         sh_coefficients_rest = self.sh_coefficients_rest.detach().cpu().view(self.sh_coefficients_rest.shape[0], -1).numpy()
@@ -429,7 +433,7 @@ class GaussianModel(nn.Module):
         rotations = np.stack([np.asarray(plydata['vertex'][name]) for name in rot_names], axis=1)
 
         # print(f"Shapes: positions={positions.shape}, sh_coefficients_0={sh_coefficients_0.shape}, sh_coefficients_rest={sh_coefficients_rest.shape}, scales={scales.shape}, rotations={rotations.shape}, opacities={opacities.shape}")
-
+        
         # Create a new GaussianModel instance with the loaded parameters
         gaussian_model = GaussianModel(
             positions=torch.tensor(positions, dtype=torch.float32).cuda(),
