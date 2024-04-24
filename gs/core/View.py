@@ -46,6 +46,16 @@ class View(nn.Module):
         self.frustum = Frustum.from_projection_matrix(full_proj_transform)
         self.aspect_ratio = math.tan(fov_x / 2) / math.tan(fov_y / 2)
 
+        # Assert that all tensors dont have nan, inf, or -inf
+        assert not torch.isnan(self.world_view_transform).any()
+        assert not torch.isnan(self.full_proj_transform).any()
+        assert not torch.isnan(self.center).any()
+        assert not torch.isnan(self.look_at).any()
+        assert not torch.isinf(self.world_view_transform).any()
+        assert not torch.isinf(self.full_proj_transform).any()
+        assert not torch.isinf(self.center).any()
+        assert not torch.isinf(self.look_at).any()
+
 
     def __repr__(self):
         return f"CameraPose(center={self.center}, look_at={self.look_at}), fov_x={self.fov_x}, fov_y={self.fov_y}"

@@ -203,6 +203,7 @@ class GaussianModel(nn.Module):
 
         if constant_scale is not None:
             scales = inverse_scale_transform(torch.tensor([constant_scale], dtype=torch.float).repeat(positions.shape[0], 3))
+            assert not (torch.isnan(scales).any() or torch.isinf(scales).any())
         else:
             dist = torch.sqrt(torch.clamp_min(distCUDA2(torch.from_numpy(np.asarray(pointcloud.points)).float().cuda()), 0.0000001))
             # Clamp dist with min max
@@ -210,6 +211,7 @@ class GaussianModel(nn.Module):
                 min_scale, max_scale = scales_range
                 dist = torch.clamp(dist, min_scale, max_scale)
             scales = inverse_scale_transform(dist[...,None].repeat(1, 3))
+            assert not (torch.isnan(scales).any() or torch.isinf(scales).any())
 
         # Initialize rotation
         rotations = torch.zeros((positions.shape[0], 4), device="cuda") # Create a tensor: (N, 4) for quaternions

@@ -34,7 +34,7 @@ class GridGaussianCell(Generic[T]): # T represents the type of the camera ID
         """
         Returns the distance between the camera to a plane defined by the cell's center and the camera's look direction.
         """
-        return torch.dot(self.center - camera.center.to("cpu"), camera.look_at.to("cpu"))
+        return torch.dot(self.center.to("cpu") - camera.center.to("cpu"), camera.look_at.to("cpu"))
     
     def get_prerender(self, camera: KnownView[T], iteration: int = None) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
@@ -45,7 +45,9 @@ class GridGaussianCell(Generic[T]): # T represents the type of the camera ID
         prerender = self.prerenders.get(iteration, {}).get(camera.id, None)
         if prerender is None:
             raise ValueError(f"Prerender for camera {camera.id} at iteration {iteration} is not available.")
-        return prerender
+        # Convert from uint8 to float32
+        rgb, depth, alpha = (tensor.to(torch.float32) / 255 for tensor in prerender)
+        return rgb, depth, alpha
     
     def clean_model_edges(self):
         """
@@ -252,8 +254,10 @@ class GridGaussianModel(Generic[T]): # T represents the type of the camera ID
                 # self.grid_active_cell.model.to(self.grid_model_train_device) # Move the active cell to the training device # WHY IS THIS NEEDED?
                 camera.to(self.grid_model_train_device) # Move the camera to the training device
                 rgb, depth, alpha = self.grid_active_cell.model.forward(camera)
-                camera.to(self.grid_model_store_device) # Move the camera back to the storage device (if it was not already there
-                rgb, depth, alpha = rgb.detach().cpu(), depth.detach().cpu(), alpha.detach().cpu()
+                camera.to(self.grid_model_store_device) # Move the camera back to the storage device (if it was not already there)
+                # rgb, depth, alpha = rgb.detach().cpu(), depth.detach().cpu(), alpha.detach().cpu()
+                # Convert to uint8 for memory efficiency and change the device to the storage device
+                rgb, depth, alpha = rgb.to("cpu").to(torch.uint8), depth.to("cpu").to(torch.uint8), alpha.to("cpu").to(torch.uint8)
                 if current_iter not in self.grid_active_cell.prerenders:
                     self.grid_active_cell.prerenders[current_iter] = {}
                 self.grid_active_cell.prerenders[current_iter][camera.id] = (rgb, depth, alpha)

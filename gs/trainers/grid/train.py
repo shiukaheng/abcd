@@ -13,6 +13,11 @@ def train(
         c: GridTrainConfig,
         _viewer = None
     ):
+    try:
+        model.assert_validity()
+    except AssertionError as e:
+        print("Model is invalid")
+        raise e
 
     if _viewer is None:
         viewer = Viewer(auto_start=False)

@@ -14,7 +14,6 @@ def densify(
         scene_scale: float, 
         gradient_threshold: float, 
         percent_dense: float = 0.01, 
-        safety_margin_factor=0.05, 
         split_n_samples: int=2,
         split_shrink_factor: float=0.8
         ) -> None:
@@ -35,7 +34,7 @@ def densify(
         # Split if exceeding 90% of the upper limit regardless of gradient
         split_mask = large_gaussian_mask
     padded_split_mask = pad_mask(split_mask, model, model.positions.device)
-    split_gaussians(model, optimizer, padded_split_mask, safety_margin_factor=safety_margin_factor, n_samples=split_n_samples, split_shrink_factor=split_shrink_factor)
+    split_gaussians(model, optimizer, padded_split_mask, n_samples=split_n_samples, split_shrink_factor=split_shrink_factor)
 
 def prune(model: GaussianModel, optimizer: torch.optim.Adam, scene_scale: float, opacity_threshold: float, screen_size_threshold: float, world_size_threshold_multiplier: float = 0.1) -> None:
     """
@@ -152,7 +151,6 @@ def split_gaussians(
         optimizer: torch.optim.Adam,
         mask: torch.Tensor,
         n_samples: int = 2,
-        safety_margin_factor: float = 0.05,
         split_shrink_factor: float = 0.8
     ) -> None:
     """
@@ -182,12 +180,11 @@ def split_gaussians(
         )
     else:
         scale_range = model.scales_range[1] - model.scales_range[0]
-        safety_margin = scale_range * safety_margin_factor
         new_scales = model.scales_inverse_activation(
             torch.clamp(
                 model.scales_activation(scales).repeat(n_samples, 1) / (split_shrink_factor * n_samples),
-                model.scales_range[0] + safety_margin,
-                model.scales_range[1] - safety_margin
+                model.scales_range[0],
+                model.scales_range[1]
             )
         )
         # Because of quirks of inverse_activation, -inf will be returned when the scale is exactly at the lower bound, and nan when at the upper bound.
