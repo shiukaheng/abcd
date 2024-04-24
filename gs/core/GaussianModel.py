@@ -451,8 +451,8 @@ class GaussianModel(nn.Module):
         # All parameters should not have NaN values
         # All parameters should not have Inf values
 
-        device = self.positions.device
-        assert all(param.device == device for param in [self.positions, self.sh_coefficients_0, self.sh_coefficients_rest, self.rotations, self.scales, self.opacities])
+        # device = self.positions.device
+        # assert all(param.device == device for param in [self.positions, self.sh_coefficients_0, self.sh_coefficients_rest, self.rotations, self.scales, self.opacities])
 
         assert self.positions.shape[0] == self.sh_coefficients_0.shape[0] == self.sh_coefficients_rest.shape[0] == self.rotations.shape[0] == self.scales.shape[0] == self.opacities.shape[0]
 

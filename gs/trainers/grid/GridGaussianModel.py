@@ -46,7 +46,12 @@ class GridGaussianCell(Generic[T]): # T represents the type of the camera ID
         if prerender is None:
             raise ValueError(f"Prerender for camera {camera.id} at iteration {iteration} is not available.")
         # Convert from uint8 to float32
-        rgb, depth, alpha = (tensor.to(torch.float32) / 255 for tensor in prerender)
+        rgb, depth, alpha = prerender
+        rgb, depth, alpha = (
+            rgb.to(torch.float32) / 255,
+            depth.to(torch.float32),
+            alpha.to(torch.float32) / 255
+        )
         return rgb, depth, alpha
     
     def clean_model_edges(self):
@@ -255,9 +260,12 @@ class GridGaussianModel(Generic[T]): # T represents the type of the camera ID
                 camera.to(self.grid_model_train_device) # Move the camera to the training device
                 rgb, depth, alpha = self.grid_active_cell.model.forward(camera)
                 camera.to(self.grid_model_store_device) # Move the camera back to the storage device (if it was not already there)
-                # rgb, depth, alpha = rgb.detach().cpu(), depth.detach().cpu(), alpha.detach().cpu()
-                # Convert to uint8 for memory efficiency and change the device to the storage device
-                rgb, depth, alpha = rgb.to("cpu").to(torch.uint8), depth.to("cpu").to(torch.uint8), alpha.to("cpu").to(torch.uint8)
+                # Convert data types to save space
+                rgb, depth, alpha = (
+                    (torch.clamp(rgb, 0, 1) * 255).to(torch.uint8).cpu(),
+                    depth.to(torch.float16).cpu(),
+                    (alpha * 255).to(torch.uint8).cpu()
+                )
                 if current_iter not in self.grid_active_cell.prerenders:
                     self.grid_active_cell.prerenders[current_iter] = {}
                 self.grid_active_cell.prerenders[current_iter][camera.id] = (rgb, depth, alpha)

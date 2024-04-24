@@ -22,7 +22,7 @@ output_model = train(
         densify_until_iter=15000,
         densify_interval=100,
         scales_lr=0.01,
-        # preview_camera=cameras[11],
+        preview_camera=cameras[11],
         densify_from_iter=200,
     ))
 
