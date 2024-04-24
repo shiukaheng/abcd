@@ -36,6 +36,12 @@ class GridGaussianCell(Generic[T]): # T represents the type of the camera ID
         """
         return torch.dot(self.center.to("cpu") - camera.center.to("cpu"), camera.look_at.to("cpu"))
     
+    def distance(self, camera: View) -> float:
+        """
+        Returns the distance between the camera to the cell's center.
+        """
+        return torch.norm(self.center.to("cpu") - camera.center.to("cpu"))
+    
     def get_prerender(self, camera: KnownView[T], iteration: int = None) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Returns the prerender of the cell for a camera at a specific iteration, or the latest iteration if not specified.
@@ -309,7 +315,7 @@ class GridGaussianModel(Generic[T]): # T represents the type of the camera ID
         active_rgb, active_depth, active_alpha = self.grid_active_cell.model.forward(camera, active_sh_degree)
         if extra_cell_compensation == "disabled": # Early return if we do not composite other cells
             return active_rgb, active_depth, active_alpha
-        active_plane_distance = self.grid_active_cell.plane_distance(camera)
+        active_plane_distance = self.grid_active_cell.distance(camera)
 
         # Next, we garner all the other cells within the frustum
         in_view_cells = self.grid_get_visible_cells_from_camera(camera.id)
