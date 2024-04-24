@@ -1,5 +1,5 @@
 import math
-from typing import Generic, TypeVar, Union
+from typing import Generic, Tuple, TypeVar, Union
 import numpy as np
 import torch
 import torch.nn as nn
@@ -86,6 +86,39 @@ class ViewWithRes(View):
     
     def __str__(self):
         return self.__repr__()
+    
+    def get_rays(self) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Generate the rays for the camera.
+        Returns:
+            origins: torch.Tensor of shape (3,), the origin of all rays.
+            directions: torch.Tensor of shape (image_height, image_width, 3),
+                        the direction of each ray.
+        """
+        # Generate pixel coordinates
+        i, j = torch.meshgrid(torch.arange(self.image_height), torch.arange(self.image_width), indexing='ij')
+        i = i.float()
+        j = j.float()
+
+        # Convert pixel coordinates to Normalized Device Coordinates (NDC)
+        x = (j + 0.5) / self.image_width * 2.0 - 1.0
+        y = (i + 0.5) / self.image_height * 2.0 - 1.0
+        z = torch.ones_like(x)  # For a pinhole camera model
+
+        # Stack coordinates
+        pixel_coords = torch.stack([x, -y, z], dim=-1)  # Flip y for image coordinate system to NDC
+
+        # Unproject rays from NDC to world coordinates using the inverse of the projection matrix
+        inv_projection_matrix = torch.inverse(self.full_proj_transform)
+        directions = torch.matmul(pixel_coords, inv_projection_matrix[:3, :3].T) + inv_projection_matrix[:3, 3]
+
+        # Normalize the direction vectors
+        directions = torch.nn.functional.normalize(directions, dim=-1)
+
+        # Camera center is the origin for all rays
+        origins = self.center.expand(self.image_height, self.image_width, 3)
+
+        return origins, directions
     
 T = TypeVar('T')
     
