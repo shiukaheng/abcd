@@ -18,13 +18,14 @@ if __name__ == "__main__":
         densify_until_iter=8000,
         grid=Grid(40, 
         grid_origin=torch.Tensor([0,0,0])), 
-        sync_interval=100,
+        sync_interval=110,
         densify_interval=100,
         # scales_lr=0.02,
         # rotations_lr=0.02,
         extra_cell_compensation="last",
-        # preview_camera=cameras[266],
+        preview_camera=cameras[105],
         min_gaussians=500,
+        # opacity_uncertainty_penalty=0.001
     ))
 
     # Save model
