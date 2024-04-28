@@ -187,50 +187,56 @@ class GaussianModel(nn.Module):
         """
         Create GaussianModel from PointCloud. This is useful for converting PointClouds to GaussianModels, which can be rendered using rasterizer.
         """
-        # Initialize positions
-        positions = torch.tensor(np.asarray(pointcloud.points)).float()
+        with torch.no_grad():
+            # Initialize positions
+            print(f"Initializing GaussianModel from PointCloud with {len(pointcloud)} points")
+            positions = torch.tensor(np.asarray(pointcloud.points)).float()
 
-        # Initialize spherical harmonics coefficients from RGB colors
-        sh_0 = rgb_to_sh(torch.tensor(np.asarray(pointcloud.colors)).float())
-        sh_coefficients = torch.zeros((sh_0.shape[0], 3, (sh_degree + 1) ** 2)).float()
-        sh_coefficients[:, :3, 0 ] = sh_0
-        sh_coefficients = sh_coefficients.transpose(1, 2)
+            # Initialize spherical harmonics coefficients from RGB colors
+            print("Calculating SH coefficients from RGB colors")
+            sh_0 = rgb_to_sh(torch.tensor(np.asarray(pointcloud.colors)).float())
+            sh_coefficients = torch.zeros((sh_0.shape[0], 3, (sh_degree + 1) ** 2)).float()
+            sh_coefficients[:, :3, 0 ] = sh_0
+            sh_coefficients = sh_coefficients.transpose(1, 2)
 
-        # Initialize scale
-        scales_activation, inverse_scale_transform = GaussianModel.get_scales_activations(scales_range)
-        if constant_scale is not None and scales_range is not None:
-            constant_scale = min(max(constant_scale, scales_range[0]), scales_range[1])
+            # Initialize scale
+            print("Initializing scales")
+            scales_activation, inverse_scale_transform = GaussianModel.get_scales_activations(scales_range)
+            if constant_scale is not None and scales_range is not None:
+                constant_scale = min(max(constant_scale, scales_range[0]), scales_range[1])
 
-        if constant_scale is not None:
-            scales = inverse_scale_transform(torch.tensor([constant_scale], dtype=torch.float).repeat(positions.shape[0], 3))
-            assert not (torch.isnan(scales).any() or torch.isinf(scales).any())
-        else:
-            dist = torch.sqrt(torch.clamp_min(distCUDA2(torch.from_numpy(np.asarray(pointcloud.points)).float().cuda()), 0.0000001))
-            # Clamp dist with min max
-            if scales_range is not None:
-                min_scale, max_scale = scales_range
-                dist = torch.clamp(dist, min_scale, max_scale)
-            scales = inverse_scale_transform(dist[...,None].repeat(1, 3))
-            assert not (torch.isnan(scales).any() or torch.isinf(scales).any())
+            if constant_scale is not None:
+                scales = inverse_scale_transform(torch.tensor([constant_scale], dtype=torch.float).repeat(positions.shape[0], 3))
+                assert not (torch.isnan(scales).any() or torch.isinf(scales).any())
+            else:
+                dist = torch.sqrt(torch.clamp_min(distCUDA2(torch.from_numpy(np.asarray(pointcloud.points)).float().cuda()), 0.0000001))
+                # Clamp dist with min max
+                if scales_range is not None:
+                    min_scale, max_scale = scales_range
+                    dist = torch.clamp(dist, min_scale, max_scale)
+                scales = inverse_scale_transform(dist[...,None].repeat(1, 3))
+                assert not (torch.isnan(scales).any() or torch.isinf(scales).any())
 
-        # Initialize rotation
-        rotations = torch.zeros((positions.shape[0], 4), device="cuda") # Create a tensor: (N, 4) for quaternions
-        rotations[:, 0] = 1 # Set the first column to 1, such that the rotation is identity
+            # Initialize rotation
+            print("Initializing rotations")
+            rotations = torch.zeros((positions.shape[0], 4), device="cuda") # Create a tensor: (N, 4) for quaternions
+            rotations[:, 0] = 1 # Set the first column to 1, such that the rotation is identity
 
-        # Initialize opacity
-        # opacities = inverse_sigmoid(0.1 * torch.ones((positions.shape[0], 1), dtype=torch.float, device="cuda")) # Set opacity to 0.1
-        opacities = inverse_sigmoid(0.1 * torch.ones((positions.shape[0], 1), dtype=torch.float, device="cuda")) # Set opacity to 0.1
+            # Initialize opacity
+            # opacities = inverse_sigmoid(0.1 * torch.ones((positions.shape[0], 1), dtype=torch.float, device="cuda")) # Set opacity to 0.1
+            print("Initializing opacities")
+            opacities = inverse_sigmoid(0.1 * torch.ones((positions.shape[0], 1), dtype=torch.float, device="cuda")) # Set opacity to 0.1
 
-        return GaussianModel(
-            positions=positions,
-            sh_coefficients=sh_coefficients,
-            rotations=rotations,
-            scales=scales,
-            opacities=opacities,
-            sh_degree=sh_degree,
-            background_color=background_color,
-            scales_range=scales_range
-        )
+            return GaussianModel(
+                positions=positions,
+                sh_coefficients=sh_coefficients,
+                rotations=rotations,
+                scales=scales,
+                opacities=opacities,
+                sh_degree=sh_degree,
+                background_color=background_color,
+                scales_range=scales_range
+            )
     
     # Convenience functions
     

@@ -11,3 +11,6 @@ class COLMAPPointCloud(BasePointCloud):
         super().__init__(points, colors)
         self.normals = normals
         self.point3d_ids = point3d_ids
+
+    def __len__(self):
+        return len(self.points)

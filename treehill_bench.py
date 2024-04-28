@@ -8,7 +8,6 @@ from gs.trainers.grid.config import GridTrainConfig
 
 if __name__ == "__main__":
     cameras, sparse = load("./datasets/mip_nerf_360/treehill/")
-    
     input_model = GaussianModel.from_point_cloud(sparse).cuda()
 
     output_model = train(
