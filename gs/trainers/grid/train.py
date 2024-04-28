@@ -54,7 +54,7 @@ def train(
 
         for cell in filtered_cells: # For each cell that has not reached the target iteration
 
-            print(f"Training cell {cell.index} for {c.sync_interval} iterations")
+            print(f"Training cell {cell.index} for {c.sync_interval} iterations, overall progress: {cell.current_iter}/{c.iterations}")
 
             # Configure cell to train for sync_interval iterations, starting from its current iteration
             target_iteration = min(cell.current_iter + c.sync_interval, c.iterations) 
