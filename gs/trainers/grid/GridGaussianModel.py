@@ -316,6 +316,7 @@ class GridGaussianModel(Generic[T]): # T represents the type of the camera ID
         if extra_cell_compensation == "disabled": # Early return if we do not composite other cells
             return active_rgb, active_depth, active_alpha
         active_plane_distance = self.grid_active_cell.distance(camera)
+        # active_plane_distance = self.grid_active_cell.plane_distance(camera)
 
         # Next, we garner all the other cells within the frustum
         in_view_cells = self.grid_get_visible_cells_from_camera(camera.id)
@@ -335,15 +336,15 @@ class GridGaussianModel(Generic[T]): # T represents the type of the camera ID
         # Now, this is the actual case where we composite the appearance of other cells together!
 
         # We gather all the other layers to composite as ((RGB, depth, alpha), plane_distance) tuples
-        prerendered_layers = [(cell.get_prerender(camera, requested_iteration), cell.plane_distance(camera)) for cell in in_view_cells if cell.current_iter != 0 and cell.index != self._active_cell_index]
+        prerendered_layers = [(cell.get_prerender(camera, requested_iteration), cell.distance(camera)) for cell in in_view_cells if cell.current_iter != 0 and cell.index != self._active_cell_index]
         # Move all prerendered layers to the training device
         prerendered_layers = [((rgb.to(self.grid_model_train_device), depth.to(self.grid_model_train_device), alpha.to(self.grid_model_train_device)), plane_distance) for ((rgb, depth, alpha), plane_distance) in prerendered_layers]
         # We add the active cell to the layers
-        layers = prerendered_layers + [((active_rgb, active_depth, active_alpha), active_plane_distance)]
+        layers_with_dist = prerendered_layers + [((active_rgb, active_depth, active_alpha), active_plane_distance)]
         # We sort the layers by plane distance
-        layers.sort(key=lambda x: -x[1])
+        layers_with_dist.sort(key=lambda x: -x[1])
         # We remove the plane distance from the layers
-        layers = [layer[0] for layer in layers]
+        layers = [layer[0] for layer in layers_with_dist]
         # We composite the layers
         composite = composite_images_rgbda(layers)
         return composite
