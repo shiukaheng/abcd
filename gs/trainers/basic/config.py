@@ -39,3 +39,4 @@ class BasicTrainConfig:
     transparency_loss_weight: float = 0.0
     split_n_samples: int = 2
     split_shrink_factor: float = 0.8
+    opacity_uncertainty_penalty: float = 0.0

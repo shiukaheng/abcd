@@ -104,9 +104,17 @@ def train(
         rendered, depth, alpha = model.forward(camera, active_sh_degree=active_sh_degree)
 
         loss = mix_l1_ssim_loss(rendered, camera.image)
+
         # Add a loss for transparency so the Gaussians fill the screen. We want alpha to be 1 everywhere.
         if c.transparency_loss_weight > 0:
             loss += c.transparency_loss_weight * torch.mean((alpha - 1.0) ** 2)
+
+        # Add a loss for the uncertainty of the opacities. We want the opacities to be either 0 or 1.
+        if c.opacity_uncertainty_penalty > 0:
+            # This probably makes training unstable, because this regularizes all Gaussians when during each iteration we only see a few.
+            # This results in Gaussians being pruned too early.
+            opacity_uncertainty = torch.sin(model.opacities * 3.14159) ** 2 
+            loss += c.opacity_uncertainty_penalty * torch.mean(opacity_uncertainty)
 
         # We perform a backward pass and update the parameters.
         loss.backward()
