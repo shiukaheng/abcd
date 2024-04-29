@@ -14,6 +14,7 @@ def pil_to_torch(pil_image):
         return image.unsqueeze(dim=-1).permute(2, 0, 1)
 
 def torch_to_pil(image):
+    image = torch.clamp(image, 0, 1)  # Clamp image values between 0 and 1
     if len(image.shape) == 3: # If the image is colored
         return Image.fromarray((image.permute(1, 2, 0).numpy() * 255).astype(np.uint8))
     else: # If the image is grayscale

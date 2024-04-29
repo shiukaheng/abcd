@@ -70,28 +70,25 @@ class Grid(NamedTuple):
             if dx != 0 or dy != 0 or dz != 0
         ]
     
-    def calculate_bounding_box_cells(self, bounding_box: BoundingBox) -> List[Tuple[BoundingBox, GridIndex]]:
+    def split_bounding_box(self, bounding_box: 'BoundingBox') -> List[Tuple['BoundingBox', 'GridIndex']]:
         """
-        Calculates the cells that are inside a bounding box.
+        Splits the bounding box into cells of the grid.
         """
-        min_grid = self.point_to_cell(bounding_box.min)
-        max_grid = self.point_to_cell(bounding_box.max)
-        
-        total_x = max_grid.x - min_grid.x + 1
-        total_y = max_grid.y - min_grid.y + 1
-        total_z = max_grid.z - min_grid.z + 1
-        total_cells = total_x * total_y * total_z
-        
+        shift = -self.grid_origin.to(bounding_box.min.device)
+        scale = 1 / self.grid_size
+
+        transformed_bb = (bounding_box + shift) * scale
+        min = torch.floor(transformed_bb.min)
+        max = torch.ceil(transformed_bb.max)
+
+        # Now, we can enumerate all bounding boxes in the grid
         cells = []
-        
-        for index in tqdm(range(total_cells), desc="Calculating cells"):
-            x = index // (total_y * total_z) + min_grid.x
-            y = (index % (total_y * total_z)) // total_z + min_grid.y
-            z = (index % (total_y * total_z)) % total_z + min_grid.z
-            
-            cell_min = torch.tensor([x, y, z]) * self.grid_size + self.grid_origin
-            cell_max = cell_min + torch.tensor([self.grid_size, self.grid_size, self.grid_size])
-            
-            cells.append((BoundingBox(min=cell_min, max=cell_max), GridIndex(x=x, y=y, z=z)))
-        
+        for x in range(int(min[0]), int(max[0])):
+            for y in range(int(min[1]), int(max[1])):
+                for z in range(int(min[2]), int(max[2])):
+                    cell_min = torch.tensor([x, y, z], device=bounding_box.min.device) / scale - shift
+                    cell_max = cell_min + torch.tensor([1, 1, 1], device=bounding_box.min.device) / scale
+                    cells.append((BoundingBox(min=cell_min, max=cell_max), GridIndex(x, y, z)))
+
         return cells
+

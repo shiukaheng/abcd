@@ -1,10 +1,12 @@
 from dataclasses import dataclass
-from typing import Dict, List, Tuple
+from typing import TYPE_CHECKING, Dict, List, Tuple
 import torch
 from tqdm import tqdm
 from gs.core.GaussianModel import GaussianModel
 from gs.geometry.bounding_box import BoundingBox
 from gs.geometry.grid import Grid, GridIndex
+if TYPE_CHECKING:
+    from gs.visualization.Viewer import Viewer
 
 def cut(model: GaussianModel, bounding_box: BoundingBox, invert=False) -> GaussianModel:
     """
@@ -22,7 +24,7 @@ def split_model(model: GaussianModel, grid: Grid, min_gaussians: int) -> Dict[Gr
     max_gaussians = 0
     model_bounding_box = model.calculate_bounding_box()
     
-    cells = grid.calculate_bounding_box_cells(model_bounding_box) # Get the cells that are inside the bounding box
+    cells = grid.split_bounding_box(model_bounding_box)
     cell_models = {}
     for cell_bounding_box, cell_index in tqdm(cells, desc="Splitting model into cells"):
         cell_model = cut(model, cell_bounding_box)

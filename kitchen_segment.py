@@ -9,7 +9,7 @@ from gs.trainers.grid.config import AutoGridConfig, GridTrainConfig
 from gs.visualization.Viewer import Viewer
 
 if __name__ == "__main__":
-    cameras, sparse = load("./datasets/mip_nerf_360/treehill/")
+    cameras, sparse = load("./datasets/mip_nerf_360/kitchen/")
     input_model = GaussianModel.from_point_cloud(sparse).cuda()
 
     input_model.to("cuda")
@@ -18,7 +18,7 @@ if __name__ == "__main__":
     viewer.add_bounding_box_boundary(input_model.calculate_bounding_box(), color=(50, 50, 50))
     # grid = AutoGridConfig().apply(input_model)
     grid = Grid(40, grid_origin=torch.Tensor([0,0,0]))
-    splits = split_model(input_model, grid, 0)
+    splits = split_model(input_model, grid, 50)
     for cell_model, bounding_box in splits.values():
         viewer.add_bounding_box_boundary(bounding_box)
     viewer.start()

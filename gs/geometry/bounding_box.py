@@ -1,5 +1,9 @@
-from typing import NamedTuple, Tuple
+from typing import TYPE_CHECKING, List, NamedTuple, Tuple
 import torch
+
+if TYPE_CHECKING:
+    from gs.geometry.grid import Grid
+    from gs.geometry.grid import GridIndex
 
 class BoundingBox(NamedTuple):
     min: torch.Tensor # torch.Tensor([x, y, z])
@@ -31,6 +35,35 @@ class BoundingBox(NamedTuple):
 
     def __sub__(self, offset: torch.Tensor) -> 'BoundingBox':
         return BoundingBox(min=self.min - offset, max=self.max - offset)
+    
+    def __mul__(self, scale: torch.Tensor) -> 'BoundingBox':
+        return BoundingBox(min=self.min * scale, max=self.max * scale)
+    
+    def __truediv__(self, scale: torch.Tensor) -> 'BoundingBox':
+        return BoundingBox(min=self.min / scale, max=self.max / scale)
+    
+    def __floordiv__(self, scale: torch.Tensor) -> 'BoundingBox':
+        return BoundingBox(min=self.min // scale, max=self.max // scale)
+    
+    def __mod__(self, scale: torch.Tensor) -> 'BoundingBox':
+        return BoundingBox(min=self.min % scale, max=self.max % scale)
+    
+    def __pow__(self, scale: torch.Tensor) -> 'BoundingBox':
+        return BoundingBox(min=self.min ** scale, max=self.max ** scale)
+    
+    def round_to_grid(self, grid: 'Grid') -> 'BoundingBox':
+        """
+        Rounds the bounding box to the grid.
+        """
+        shift = -grid.grid_origin
+        scale = 1 / grid.grid_size
+
+        transformed_bb = (self + shift) * scale
+        min = torch.floor(transformed_bb.min)
+        max = torch.ceil(transformed_bb.max)
+
+        untransformed = BoundingBox(min / scale - shift, max / scale - shift)
+        return untransformed
     
     def get_corners(self) -> Tuple[Tuple[float, float, float]]:
         """
@@ -80,3 +113,9 @@ class BoundingBox(NamedTuple):
         Returns the center of the bounding box.
         """
         return (self.min + self.max) / 2
+    
+    def intersects(self, other: 'BoundingBox') -> bool:
+        """
+        Returns whether the bounding box intersects with another bounding box.
+        """
+        return torch.all(self.min <= other.max) and torch.all(self.max >= other.min)

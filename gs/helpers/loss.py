@@ -17,6 +17,9 @@ import torch
 import torch.nn.functional as F
 from torch.autograd import Variable
 from math import exp
+import lpips
+
+lpips_func = lpips.LPIPS(net='vgg', verbose=False).cuda()
 
 def l1_loss(network_output, gt, mask=None):
     """
@@ -99,3 +102,16 @@ def mix_l1_ssim_loss(predicted, target, lambda_dssim=0.2):
     l1 = l1_loss(predicted, target)
     ssim = ssim_loss(predicted, target)
     return (1.0 - lambda_dssim) * l1 + lambda_dssim * (1.0 - ssim)
+
+def psnr_loss(predicted, target):
+    """
+    Peak Signal-to-Noise Ratio (PSNR) loss.
+    """
+    mse = l2_loss(predicted, target)
+    return 10 * torch.log10(1 / mse)
+
+def lpips_loss(predicted, target):
+    """
+    Learned Perceptual Image Patch Similarity (LPIPS) loss.
+    """
+    return lpips_func(predicted, target)
