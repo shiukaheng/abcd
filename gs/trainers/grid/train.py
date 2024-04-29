@@ -1,8 +1,11 @@
 from typing import List
+
+import torch
 from gs.core.GaussianModel import GaussianModel
 from gs.core.View import KnownView
+from gs.geometry.grid import Grid
 from gs.helpers.scene import estimate_scene_scale
-from gs.trainers.grid.config import GridTrainConfig
+from gs.trainers.grid.config import AutoGridConfig, GridTrainConfig
 from gs.trainers.grid.GridGaussianModel import GridGaussianModel
 from gs.trainers.basic.train import train as basic_train
 from gs.visualization.Viewer import Viewer
@@ -32,10 +35,18 @@ def train(
 
     # Split model into grid on its original device
     model.to(c.model_store_device)
+
+    # Calculate grid if required
+
+    if isinstance(c.grid_config, Grid):
+        grid = c.grid_config
+    elif isinstance(c.grid_config, AutoGridConfig):
+        grid = c.grid_config.apply(model)
+
     grid_model = GridGaussianModel.from_gaussian_model(
         model, 
         cameras, 
-        c.grid, 
+        grid, 
         c.model_store_device, 
         c.model_train_device, 
         min_gaussians=c.min_gaussians, 

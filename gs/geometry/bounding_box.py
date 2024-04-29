@@ -66,3 +66,17 @@ class BoundingBox(NamedTuple):
             (corners[5], corners[7]),
             (corners[6], corners[7]),
         )
+    
+    @property
+    def volume(self) -> float:
+        """
+        Returns the volume of the bounding box.
+        """
+        return torch.prod(self.max - self.min).item()
+    
+    @property
+    def center(self) -> torch.Tensor:
+        """
+        Returns the center of the bounding box.
+        """
+        return (self.min + self.max) / 2

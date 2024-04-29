@@ -21,7 +21,7 @@ output_model = train(
     GridTrainConfig(
         iterations=20000,
         densify_until_iter=15000,
-        grid=Grid(100, 
+        grid_config=Grid(100, 
         grid_origin=torch.Tensor([0,0,55])), 
         # sync_interval=1750,
         sync_interval=240,

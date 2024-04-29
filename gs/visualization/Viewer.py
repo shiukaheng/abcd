@@ -1,6 +1,7 @@
 
 import time
 from typing import Generic, List, Literal, NamedTuple, Tuple, TypeVar, Union
+import uuid
 import numpy as np
 import torch
 import viser
@@ -241,6 +242,28 @@ class Viewer(Generic[T]):
         # Unfortuately Viser does not support creating 3D wireframe boxes. We can instead use 6 1x1 grid planes to represent the bounding box
         curve_args = []
         for i, segment in enumerate(cell.bounding_box.get_edges()):
+            curve_args.append({
+                "name": f"{name}/{i}",
+                "positions": segment,
+                "control_points": segment,
+                "line_width": line_width,
+                "color": color,
+                "segments": 1,
+            })
+
+        return GroupSceneNodeHandle([
+            self.viser.add_spline_cubic_bezier(**args) for args in curve_args
+        ])
+        
+
+    def add_bounding_box_boundary(self, bb: BoundingBox, color=(255, 255, 255), line_width=2):
+        """
+        Add bounding box to the viewer
+        """
+        name = f"/bounding_boxes/{uuid.uuid4()}"
+        # Unfortuately Viser does not support creating 3D wireframe boxes. We can instead use 6 1x1 grid planes to represent the bounding box
+        curve_args = []
+        for i, segment in enumerate(bb.get_edges()):
             curve_args.append({
                 "name": f"{name}/{i}",
                 "positions": segment,

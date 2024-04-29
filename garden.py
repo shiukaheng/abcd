@@ -13,15 +13,14 @@ if __name__ == "__main__":
     input_model = GaussianModel.from_point_cloud(sparse).cuda()
 
     # input_model.to("cuda")
-    # viewer = Viewer(auto_start=False)
-    # viewer.set_model(input_model)
-    # viewer.add_bounding_box_boundary(input_model.calculate_bounding_box(), color=(50, 50, 50))
-    # # grid = AutoGridConfig().apply(input_model)
-    # grid = Grid(40, grid_origin=torch.Tensor([0,0,0]))
-    # splits = split_model(input_model, grid, 0)
-    # for cell_model, bounding_box in splits.values():
-    #     viewer.add_bounding_box_boundary(bounding_box)
-    # viewer.start()
+    viewer = Viewer(auto_start=False)
+    viewer.set_model(input_model)
+    viewer.add_bounding_box_boundary(input_model.calculate_bounding_box(), color=(50, 50, 50))
+    grid = AutoGridConfig().apply(input_model)
+    splits = split_model(input_model, grid, 0)
+    for cell_model, bounding_box in splits.values():
+        viewer.add_bounding_box_boundary(bounding_box)
+    viewer.start()
 
     output_model = train(
     input_model, 
@@ -33,13 +32,7 @@ if __name__ == "__main__":
         grid_origin=torch.Tensor([0,0,0])), 
         sync_interval=250,
         densify_interval=100,
-        # scales_lr=0.02,
-        # rotations_lr=0.02,
         extra_cell_compensation="last",
         preview_camera=cameras[105],
-        min_gaussians=500,
-        # opacity_uncertainty_penalty=0.001
+        min_gaussians=50,
     ))
-
-    # Save model
-    output_model.save_ply("./samples/treehill_bench.ply")

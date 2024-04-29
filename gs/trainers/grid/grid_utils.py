@@ -21,6 +21,7 @@ def split_model(model: GaussianModel, grid: Grid, min_gaussians: int) -> Dict[Gr
     """
     max_gaussians = 0
     model_bounding_box = model.calculate_bounding_box()
+    
     cells = grid.calculate_bounding_box_cells(model_bounding_box) # Get the cells that are inside the bounding box
     cell_models = {}
     for cell_bounding_box, cell_index in tqdm(cells, desc="Splitting model into cells"):

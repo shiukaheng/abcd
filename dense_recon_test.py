@@ -32,7 +32,7 @@ if __name__ == "__main__":
     GridTrainConfig(
         iterations=20000,
         densify_until_iter=15000,
-        grid=Grid(15, 
+        grid_config=Grid(15, 
         grid_origin=torch.Tensor([0,0,-5])), 
         sync_interval=5000,
         densify_interval=2000,
