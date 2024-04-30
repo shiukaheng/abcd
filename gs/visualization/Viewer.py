@@ -261,7 +261,7 @@ class Viewer(Generic[T]):
         Add bounding box to the viewer
         """
         name = f"/bounding_boxes/{uuid.uuid4()}"
-        # Unfortuately Viser does not support creating 3D wireframe boxes. We can instead use 6 1x1 grid planes to represent the bounding box
+        # Unfortuately Viser does not support creating 3D wireframe boxes. We can instead use splines to piece together the bounding box
         curve_args = []
         for i, segment in enumerate(bb.get_edges()):
             curve_args.append({
