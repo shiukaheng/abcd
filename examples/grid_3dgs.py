@@ -1,0 +1,1 @@
+# This is an example of training a grid-split 3D Gaussian Splatting model.

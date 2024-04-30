@@ -167,6 +167,6 @@ def train(
 
     return model
 
-def show_image(preview_render):
-    cv2.imshow('Rendered', torch_to_cv2(preview_render.detach().cpu()))
+def show_image(preview_render, name="Rendered"):
+    cv2.imshow(name, torch_to_cv2(preview_render.detach().cpu()))
     cv2.waitKey(5)

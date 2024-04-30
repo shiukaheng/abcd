@@ -4,6 +4,8 @@ import torch
 from gs.core.View import View, ViewWithRes
 from gs.geometry.raycast_sphere import sphere_ray_intersection
 
+# Stub for SphereImagesMLP.
+
 class SphereImagesMLP(torch.nn.Module):
 
     def __init__(self, radii=[100,150,200], origin=np.array([0, 0, 0]), width=256, hidden_depth=6):

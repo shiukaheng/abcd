@@ -5,3 +5,6 @@ class BasePointCloud:
     def __init__(self, points, colors):
         self.points = points
         self.colors = colors
+
+    def __len__(self):
+        return len(self.points)
