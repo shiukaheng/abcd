@@ -2,7 +2,20 @@
 GridGaussians is a method for training large 3D Gaussian splatting models that traditionally cannot fit into GPU memory without compromising on quality. We use a grid to split the model into smaller parts, and train each part separately. During the training of each grid cell, we composite still images of other cells to simulate the full model. This allows us to train models that are orders of magnitude larger than the GPU memory. 
 
 # Installing dependencies
-## Method 1: Local environment (Tested on Python 3.8)
+
+## Method 1: .devcontainer
+
+Devcontainers automatically recreate the development environment using Docker. It is mainly supported by VSCode but there is [also limited support for other editors](https://containers.dev/supporting).
+
+Requirements:
+- [Docker](https://docs.docker.com/desktop/install/linux-install/)
+- [nvidia-container-toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) (may also be available on apt)
+- VSCode
+- [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
+
+When you open the repository you should be prompted to enter the container environment. First time running might take around 5 minutes to build the environment.
+
+## Method 2: Local environment (tested on Python 3.8, Linux Mint 21.2)
 `NOTE: It is recommended to use conda to manage the environment.`
 
 - [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads)
@@ -10,13 +23,6 @@ GridGaussians is a method for training large 3D Gaussian splatting models that t
 - Installing PyBind11 submodules
     - `pip install -e ./submodules/diff-gaussian-rasterization/`
     - `pip install -e ./submodules/simple-knn/`
-    
-## Method 2: .devcontainer
-
-Devcontainers automatically recreate the development environment using Docker. It is mainly supported by VSCode but there is [also limited support for other editors](https://containers.dev/supporting).
-Install the relevant extensions, and when you open the repository you should be prompted to enter the container environment. First time running might take around 5 minutes to build the environment.
-- VSCode
-- [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
 
 # Downloading the sample dataset
 The sampling dataset is from the MIP-NeRF 360 paper. For convenience, the images are resized and zipped.
