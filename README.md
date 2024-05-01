@@ -21,13 +21,7 @@ Install the relevant extensions, and when you open the repository you should be 
 
 # Downloading the sample dataset
 The sampling dataset is from the MIP-NeRF 360 paper. For convenience, the images are resized and zipped.
-To download and extract the dataset, run the following commands:
-```bash
-mkdir datasets
-wget -O ./datasets/mip_nerf_360.zip https://skhpersonal.s3.amazonaws.com/mip_nerf_360.zip
-unzip ./datasets/mip_nerf_360.zip -d ./datasets
-rm ./datasets/mip_nerf_360.zip
-```
+To download and extract the dataset, run `download_dataset.sh`
 
 # Getting started
 For an example of how to train a 3DGS model using the grid-based training loop, run the following command:
