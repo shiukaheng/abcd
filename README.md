@@ -1,4 +1,7 @@
 # GridGaussians
+
+![demo](./images/demo.gif)
+
 GridGaussians is a method for training large 3D Gaussian splatting models that traditionally cannot fit into GPU memory without compromising on quality. We use a grid to split the model into smaller parts, and train each part separately. During the training of each grid cell, we composite still images of other cells to simulate the full model. This allows us to train models that are orders of magnitude larger than the GPU memory. 
 
 # 📦 Installing dependencies
