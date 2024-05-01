@@ -18,3 +18,7 @@ pip3 install \
     viser
 pip3 install -e ./submodules/diff-gaussian-rasterization/
 pip3 install -e ./submodules/simple-knn/
+
+USERNAME=$(whoami)
+sudo mkdir /home/vscode/.cache/torch
+sudo chown -R $USERNAME:$USERNAME /home/vscode/.cache/torch

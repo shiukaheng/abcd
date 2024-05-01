@@ -167,9 +167,10 @@ output/
 
 # Ignore everything in the .pip-cache directory
 .devcontainer/.pip-cache/*
-
+.devcontainer/.torch-cache/*
 # But not the README.md file
 !.devcontainer/.pip-cache/README.md
+!.devcontainer/.torch-cache/README.md
 
 samples/
 *.ply
