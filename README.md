@@ -12,7 +12,6 @@ GridGaussians is a method for training large 3D Gaussian splatting models that t
     - `pip install -e ./submodules/simple-knn/`
     
 ## Method 2: .devcontainer
-`NOTE: The CUDA compiled submodules seem to be probelmatic in the devcontainer, perhaps due to library conflicts. The devcontainer is not recommended for now.`
 
 Devcontainers automatically recreate the development environment using Docker. It is mainly supported by VSCode but there is [also limited support for other editors](https://containers.dev/supporting).
 Install the relevant extensions, and when you open the repository you should be prompted to enter the container environment. First time running might take around 5 minutes to build the environment.
