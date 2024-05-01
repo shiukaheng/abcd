@@ -1,7 +1,7 @@
 # GridGaussians
 GridGaussians is a method for training large 3D Gaussian splatting models that traditionally cannot fit into GPU memory without compromising on quality. We use a grid to split the model into smaller parts, and train each part separately. During the training of each grid cell, we composite still images of other cells to simulate the full model. This allows us to train models that are orders of magnitude larger than the GPU memory. 
 
-# Installing dependencies
+# 📦 Installing dependencies
 
 ## Method 1: .devcontainer
 
@@ -24,17 +24,18 @@ When you open the repository you should be prompted to enter the container envir
     - `pip install -e ./submodules/diff-gaussian-rasterization/`
     - `pip install -e ./submodules/simple-knn/`
 
-# Downloading the sample dataset
+# 🔗 Downloading the sample dataset
 The sampling dataset is from the MIP-NeRF 360 paper. For convenience, the images are resized and zipped.
 To download and extract the dataset, run `download_dataset.sh`
 
-# Getting started
+# 🏃‍♂️ Getting started
 For an example of how to train a 3DGS model using the grid-based training loop, run the following command:
 ```bash
 python ./grid_3dgs_demo.py
 ```
 During training, you can visualize the model using the web-based viewer which will be started automatically. The viewer can be accessed at `http://localhost:8080`.
-# Code structure
+
+# 📄 Code structure
 The codebase is structured as follows:
 - `gs/`: The Gaussian splatting module.
     - `compositing/`: Functions for compositing images in the grid-based training loop
@@ -53,6 +54,6 @@ The codebase is structured as follows:
         - `Viewer.py`: Class for starting a web-based 3DGS viewer for a `GaussianModel`
     - `helpers/`: General functions for rendering and training 3DGS models\
 
-# Credits
+# 🫂 Credits
 - [3D Gaussian splatting](https://github.com/graphdeco-inria/gaussian-splatting)
 - [Modified rasterization code from ashwakey to support depth and alpha channels](https://github.com/ashawkey/diff-gaussian-rasterization)
