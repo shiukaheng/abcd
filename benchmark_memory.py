@@ -16,22 +16,23 @@ from gs.trainers.grid.train import train as grid_train
 from gs.visualization import Viewer
 
 
-DATASETS = ["bonsai", "kitchen", "garden", "room", "stump"]
+# DATASETS = ["bonsai", "kitchen", "garden", "room", "stump"]
+DATASETS = ["kitchen"]
 
 METHODS = [
-    ("vanilla", {}),
-    (
-        "grid_disabled",
-        {"extra_cell_compensation": "disabled", "precomposite_enabled": False},
-    ),
-    (
-        "grid_last_gpu",
-        {
-            "extra_cell_compensation": "last",
-            "precomposite_enabled": True,
-            "precomposite_storage": "gpu",
-        },
-    ),
+    # ("vanilla", {}),
+    # (
+    #     "grid_disabled",
+    #     {"extra_cell_compensation": "disabled", "precomposite_enabled": False},
+    # ),
+    # (
+    #     "grid_last_gpu",
+    #     {
+    #         "extra_cell_compensation": "last",
+    #         "precomposite_enabled": True,
+    #         "precomposite_storage": "gpu",
+    #     },
+    # ),
     (
         "grid_last_cpu",
         {
@@ -43,8 +44,10 @@ METHODS = [
 ]
 
 GRID_SIZE = 5
-ITERATIONS = 5000
-SYNC_INTERVAL = 250
+# ITERATIONS = 5000
+ITERATIONS = 100
+# SYNC_INTERVAL = 250
+SYNC_INTERVAL = 100
 MIN_GAUSSIANS = 50
 IMAGES_SUBDIR = "images_4"
 
