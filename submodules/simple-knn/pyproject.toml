@@ -1,0 +1,7 @@
+[build-system]
+requires = ["setuptools", "torch", "pybind11"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "simple_knn"
+version = "0.0.1"

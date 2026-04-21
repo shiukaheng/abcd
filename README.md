@@ -26,19 +26,25 @@ When you open the repository you should be prompted to enter the container envir
 # Install uv if not already installed
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Initialize the project (creates virtual environment with Python 3.11)
-uv init --python 3.11
+# Clone the repository
+git clone <repo-url>
+cd grid-gaussians
 
-# Install all dependencies
-uv pip install -r pyproject.toml
+# Sync all dependencies (creates virtual environment and installs everything)
+uv sync
 
-# Install PyTorch with CUDA support
-uv pip install torch==2.2.2 torchvision==0.17.2 torchaudio==2.2.2 \
-  --index-url https://download.pytorch.org/whl/cu121
+# Build CUDA submodules (requires torch to be installed first)
+uv run python build_submodule.py ./submodules/diff-gaussian-rasterization
+uv run python build_submodule.py ./submodules/simple-knn
 
-# Build CUDA submodules
-python build_submodule.py ./submodules/diff-gaussian-rasterization
-python build_submodule.py ./submodules/simple-knn
+# Add submodules to Python path
+echo "$(pwd)/submodules/diff-gaussian-rasterization" > .venv/lib/python3.11/site-packages/submodules.pth
+echo "$(pwd)/submodules/simple-knn" >> .venv/lib/python3.11/site-packages/submodules.pth
+```
+
+After setup, use `uv run` to run Python scripts:
+```bash
+uv run python grid_3dgs_demo.py
 ```
 
 ## Method 3: Local environment (tested on Python 3.8, Linux Mint 21.2)
