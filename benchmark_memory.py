@@ -1,6 +1,9 @@
+import gc
 import os
 import time
 import multiprocessing as mp
+
+import torch
 
 from gs.core.GaussianModel import GaussianModel
 from gs.geometry.grid import Grid
@@ -10,6 +13,7 @@ from gs.trainers.basic.config import BasicTrainConfig
 from gs.trainers.basic.train import train as basic_train
 from gs.trainers.grid.config import GridTrainConfig
 from gs.trainers.grid.train import train as grid_train
+from gs.visualization import Viewer
 
 
 DATASETS = ["bonsai", "kitchen", "garden", "room", "stump"]
@@ -47,6 +51,18 @@ IMAGES_SUBDIR = "images_4"
 BENCHMARK_DIR = "./benchmark_results"
 
 
+def cleanup_memory():
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        torch.cuda.synchronize()
+    gc.collect()
+
+
+def reset_viewer():
+    Viewer.shared_viser["viser"] = None
+    Viewer.shared_viser["viewer"] = None
+
+
 def run_benchmark(dataset: str, method: str, config_overrides: dict):
     dataset_path = f"./datasets/{dataset}"
     output_dir = os.path.join(BENCHMARK_DIR, f"{dataset}_{method}")
@@ -60,6 +76,8 @@ def run_benchmark(dataset: str, method: str, config_overrides: dict):
     print(f"Running: {dataset} / {method}")
     print(f"{'=' * 60}\n")
 
+    reset_viewer()
+    cleanup_memory()
     cameras, sparse = load(dataset_path, IMAGES_SUBDIR)
 
     pid = os.getpid()
@@ -89,6 +107,13 @@ def run_benchmark(dataset: str, method: str, config_overrides: dict):
     print(f"Model saved to {model_path}")
     print(f"Training log: {training_csv_path}")
     print(f"Memory log: {memory_csv_path}")
+
+    del output_model
+    del input_model
+    del cameras
+    del sparse
+    reset_viewer()
+    cleanup_memory()
 
 
 def main():
