@@ -9,7 +9,7 @@ from gs.core.View import KnownView
 from gs.core.GaussianModel import GaussianModel
 from gs.helpers.formatting import format_number
 from gs.helpers.image import torch_to_cv2, torch_to_numpy, torch_to_pil
-from gs.helpers.loss import mix_l1_ssim_loss
+from gs.helpers.loss import mix_l1_ssim_loss, l2_loss
 from gs.helpers.scene import estimate_scene_scale
 from gs.helpers.training import get_expon_lr_func
 from gs.trainers.basic.config import BasicTrainConfig
@@ -141,7 +141,8 @@ def train(
             camera, active_sh_degree=active_sh_degree
         )
 
-        loss = mix_l1_ssim_loss(rendered, camera.image)
+        # Fast MSE loss only (LPIPS/L1+SSIM disabled for speed)
+        loss = l2_loss(rendered, camera.image)
 
         # Add a loss for transparency so the Gaussians fill the screen. We want alpha to be 1 everywhere.
         if c.transparency_loss_weight > 0:
