@@ -12,13 +12,36 @@ Devcontainers automatically recreate the development environment using Docker. I
 
 Requirements:
 - [Docker](https://docs.docker.com/desktop/install/linux-install/)
-- [nvidia-container-toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) (may also be available on apt)
+- [nvidia-container-toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) (may also available on apt)
 - VSCode
 - [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
 
 When you open the repository you should be prompted to enter the container environment. First time running might take around 5 minutes to build the environment.
 
-## Method 2: Local environment (tested on Python 3.8, Linux Mint 21.2)
+## Method 2: UV Environment (Recommended - Python 3.11+)
+
+[UV](https://github.com/astral-sh/uv) is a fast Python package manager and environment manager.
+
+```bash
+# Install uv if not already installed
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Initialize the project (creates virtual environment with Python 3.11)
+uv init --python 3.11
+
+# Install all dependencies
+uv pip install -r pyproject.toml
+
+# Install PyTorch with CUDA support
+uv pip install torch==2.2.2 torchvision==0.17.2 torchaudio==2.2.2 \
+  --index-url https://download.pytorch.org/whl/cu121
+
+# Build CUDA submodules
+python build_submodule.py ./submodules/diff-gaussian-rasterization
+python build_submodule.py ./submodules/simple-knn
+```
+
+## Method 3: Local environment (tested on Python 3.8, Linux Mint 21.2)
 `NOTE: It is recommended to use conda to manage the environment.`
 
 - [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads)
