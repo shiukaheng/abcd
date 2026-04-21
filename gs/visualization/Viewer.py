@@ -273,6 +273,7 @@ class Viewer(Generic[T]):
         self.running = False
         if self.render_thread.is_alive():
             self.render_thread.join()
+        self.model = None
         if stop_viser:
             self.viser.stop()
 
