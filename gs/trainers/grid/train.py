@@ -10,12 +10,10 @@ from gs.trainers.grid.GridGaussianModel import GridGaussianModel
 from gs.trainers.basic.train import train as basic_train
 from gs.visualization.Viewer import Viewer
 
+
 def train(
-        model: GaussianModel, 
-        cameras: List[KnownView], 
-        c: GridTrainConfig,
-        _viewer = None
-    ):
+    model: GaussianModel, cameras: List[KnownView], c: GridTrainConfig, _viewer=None
+):
     try:
         model.assert_validity()
     except AssertionError as e:
@@ -44,31 +42,42 @@ def train(
         grid = c.grid_config.apply(model)
 
     grid_model = GridGaussianModel.from_gaussian_model(
-        model, 
-        cameras, 
-        grid, 
-        c.model_store_device, 
-        c.model_train_device, 
-        min_gaussians=c.min_gaussians, 
-        default_extra_cell_compensation=c.extra_cell_compensation
+        model,
+        cameras,
+        grid,
+        c.model_store_device,
+        c.model_train_device,
+        min_gaussians=c.min_gaussians,
+        default_extra_cell_compensation=c.extra_cell_compensation,
+        precomposite_enabled=c.precomposite_enabled,
+        precomposite_storage=c.precomposite_storage,
     )
 
     # We train each cell in the grid for sync_interval iterations
-    while all(cell.current_iter < c.iterations for cell in grid_model.grid_iter()): # While there are cells that have not reached the target iteration
+    while all(
+        cell.current_iter < c.iterations for cell in grid_model.grid_iter()
+    ):  # While there are cells that have not reached the target iteration
         cells = list(grid_model.grid_iter())
         if len(cells) == 0:
-            raise ValueError("Cell filtering criteria is too strict, no cells left to train")
-        filtered_cells = list(filter(lambda cell: cell.current_iter < c.iterations, cells))
+            raise ValueError(
+                "Cell filtering criteria is too strict, no cells left to train"
+            )
+        filtered_cells = list(
+            filter(lambda cell: cell.current_iter < c.iterations, cells)
+        )
         if len(filtered_cells) == 0:
             print("All cells have reached the target iteration")
             break
 
-        for cell in filtered_cells: # For each cell that has not reached the target iteration
-
-            print(f"Training cell {cell.index} for {c.sync_interval} iterations, overall progress: {cell.current_iter}/{c.iterations}")
+        for (
+            cell
+        ) in filtered_cells:  # For each cell that has not reached the target iteration
+            print(
+                f"Training cell {cell.index} for {c.sync_interval} iterations, overall progress: {cell.current_iter}/{c.iterations}"
+            )
 
             # Configure cell to train for sync_interval iterations, starting from its current iteration
-            target_iteration = min(cell.current_iter + c.sync_interval, c.iterations) 
+            target_iteration = min(cell.current_iter + c.sync_interval, c.iterations)
             c_cell = GridTrainConfig(**c.__dict__)
             c_cell.starting_iter = cell.current_iter
             c_cell.ending_iter = target_iteration
@@ -78,13 +87,12 @@ def train(
 
             # Train the cell
             grid_model.grid_set_active_cell_index(cell.index)
-            visible_cameras = grid_model.grid_get_visible_cameras_from_cell(cell.index) # Get the cameras that can see the cell
-            basic_train(
-                grid_model,
-                visible_cameras,
-                c_cell,
-                viewer
-            )
+            if c.precomposite_enabled and c.extra_cell_compensation != "disabled":
+                grid_model.grid_precompose_visible_layers(c.extra_cell_compensation)
+            visible_cameras = grid_model.grid_get_visible_cameras_from_cell(
+                cell.index
+            )  # Get the cameras that can see the cell
+            basic_train(grid_model, visible_cameras, c_cell, viewer)
 
             cell.clean_model_edges()
             bounding_box_viz.remove()
@@ -112,5 +120,3 @@ def train(
     print(f"Total Gaussians: {len(merged)}")
 
     return merged
-
-
