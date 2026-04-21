@@ -28,7 +28,9 @@ This module contains the main functions for loading COLMAP models.
 """
 
 
-def load(path: str) -> Tuple[List[COLMAPView], COLMAPPointCloud]:
+def load(
+    path: str, images_subdir: str = "images"
+) -> Tuple[List[COLMAPView], COLMAPPointCloud]:
     """
     Loads a COLMAP model from a path, returns (List[Camera], PointCloud)
 
@@ -38,16 +40,16 @@ def load(path: str) -> Tuple[List[COLMAPView], COLMAPPointCloud]:
             cameras.bin OR cameras.txt
             images.bin OR images.txt
             points3D.bin OR points3D.txt
-        images/
+        <images_subdir>/
             <image_name>.jpg
             ...
     """
-    cameras = load_cameras(path)
+    cameras = load_cameras(path, images_subdir)
     sparse_points = load_sparse_points(path)
     return cameras, sparse_points
 
 
-def load_cameras(path: str) -> List[COLMAPView]:
+def load_cameras(path: str, images_subdir: str = "images") -> List[COLMAPView]:
     try:
         cameras_extrinsic_file = os.path.join(path, "sparse/0", "images.bin")
         cameras_intrinsic_file = os.path.join(path, "sparse/0", "cameras.bin")
@@ -60,7 +62,7 @@ def load_cameras(path: str) -> List[COLMAPView]:
         camera_intrinsics = read_intrinsics_text(cameras_intrinsic_file)
 
     # Now, we use the intermediate format to create Camera objects
-    images_folder = os.path.join(path, "images")
+    images_folder = os.path.join(path, images_subdir)
     cameras = []
 
     pbar = tqdm(camera_extrinsics, desc="Loading cameras")

@@ -22,13 +22,15 @@ def get_save_path(dataset_path: str, save_path: str) -> str:
     return save_path
 
 
-def train_grid_3dgs(dataset_path: str, save_path: Union[str, None] = None):
+def train_grid_3dgs(
+    dataset_path: str, save_path: Union[str, None] = None, images_subdir: str = "images"
+):
     """
     Train a 3D Gaussian Splatting model on a dataset.
     """
 
     # Import dataset
-    cameras, sparse = load(dataset_path)
+    cameras, sparse = load(dataset_path, images_subdir)
 
     # Create configuration for training
     config = GridTrainConfig(
@@ -54,4 +56,6 @@ def train_grid_3dgs(dataset_path: str, save_path: Union[str, None] = None):
 
 if __name__ == "__main__":
     dataset_path = "./datasets/kitchen"
-    train_grid_3dgs(dataset_path)
+    # Use different resolution: "images_2", "images_4", or "images_8"
+    # train_grid_3dgs(dataset_path)  # original resolution
+    train_grid_3dgs(dataset_path, images_subdir="images_4")  # 1/8 resolution
