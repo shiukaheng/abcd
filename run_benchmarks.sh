@@ -1,11 +1,24 @@
 #!/bin/bash
 
-DATASETS=("bonsai" "kitchen" "garden" "room" "stump")
+set -e
+
+cleanup() {
+    echo ""
+    echo "Benchmark interrupted by user"
+    exit 1
+}
+
+trap cleanup INT TERM
+
+# DATASETS=("bonsai" "kitchen" "garden" "room" "stump")
+DATASETS=("kitchen")
 METHODS=("vanilla" "grid_naive" "grid_gpu" "grid_cpu")
 
 GRID_SIZE=5
-ITERATIONS=5000
-SYNC_INTERVAL=250
+# ITERATIONS=5000
+ITERATIONS=100
+# SYNC_INTERVAL=250
+SYNC_INTERVAL=100
 MIN_GAUSSIANS=50
 IMAGES_SUBDIR="images_4"
 OUTPUT_DIR="./benchmark_results"
@@ -22,7 +35,7 @@ for dataset in "${DATASETS[@]}"; do
         echo ""
         echo "[$current/$total] Starting $dataset / $method"
         
-        python run_benchmark.py \
+        uv run run_benchmark.py \
             --dataset "./datasets/$dataset" \
             --output "$OUTPUT_DIR/${dataset}_${method}" \
             --method "$method" \
@@ -44,3 +57,7 @@ echo "Benchmark complete!"
 echo "Total time: $hours hours"
 echo "Results saved to $OUTPUT_DIR"
 echo "============================================================"
+
+echo ""
+echo "Generating visualizations..."
+uv run visualize_benchmark.py --benchmark-dir "$OUTPUT_DIR" --output-dir "./benchmark_plots"

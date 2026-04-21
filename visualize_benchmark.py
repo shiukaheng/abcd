@@ -1,5 +1,5 @@
 import os
-import glob
+import tyro
 import re
 
 import matplotlib.pyplot as plt
@@ -7,22 +7,18 @@ import numpy as np
 import pandas as pd
 
 
-BENCHMARK_DIR = "./benchmark_results"
-OUTPUT_DIR = "./benchmark_plots"
-
-
-def load_results():
+def load_results(benchmark_dir: str):
     results = {}
-    pattern = re.compile(r"(.+)_(vanilla|grid_disabled|grid_last_gpu|grid_last_cpu)")
+    pattern = re.compile(r"(.+)_(vanilla|grid_naive|grid_gpu|grid_cpu)")
 
-    for folder in sorted(os.listdir(BENCHMARK_DIR)):
+    for folder in sorted(os.listdir(benchmark_dir)):
         match = pattern.match(folder)
         if not match:
             continue
         dataset, method = match.groups()
 
-        memory_path = os.path.join(BENCHMARK_DIR, folder, "memory.csv")
-        training_path = os.path.join(BENCHMARK_DIR, folder, "training.csv")
+        memory_path = os.path.join(benchmark_dir, folder, "memory.csv")
+        training_path = os.path.join(benchmark_dir, folder, "training.csv")
 
         if not os.path.exists(memory_path) or not os.path.exists(training_path):
             continue
@@ -46,9 +42,9 @@ def plot_dataset(results, dataset, methods_order):
 
     colors = {
         "vanilla": "#1f77b4",
-        "grid_disabled": "#ff7f0e",
-        "grid_last_gpu": "#2ca02c",
-        "grid_last_cpu": "#d62728",
+        "grid_naive": "#ff7f0e",
+        "grid_gpu": "#2ca02c",
+        "grid_cpu": "#d62728",
     }
 
     ax_ram, ax_vram = axes
@@ -86,7 +82,7 @@ def plot_dataset(results, dataset, methods_order):
 
 
 def plot_all_datasets(all_results):
-    methods_order = ["vanilla", "grid_disabled", "grid_last_gpu", "grid_last_cpu"]
+    methods_order = ["vanilla", "grid_naive", "grid_gpu", "grid_cpu"]
     datasets = sorted(all_results.keys())
 
     n_datasets = len(datasets)
@@ -97,9 +93,9 @@ def plot_all_datasets(all_results):
 
     colors = {
         "vanilla": "#1f77b4",
-        "grid_disabled": "#ff7f0e",
-        "grid_last_gpu": "#2ca02c",
-        "grid_last_cpu": "#d62728",
+        "grid_naive": "#ff7f0e",
+        "grid_gpu": "#2ca02c",
+        "grid_cpu": "#d62728",
     }
 
     for row_idx, dataset in enumerate(datasets):
@@ -148,7 +144,7 @@ def plot_all_datasets(all_results):
 
 
 def create_summary_table(all_results):
-    methods_order = ["vanilla", "grid_disabled", "grid_last_gpu", "grid_last_cpu"]
+    methods_order = ["vanilla", "grid_naive", "grid_gpu", "grid_cpu"]
 
     rows = []
     for dataset in sorted(all_results.keys()):
@@ -173,10 +169,12 @@ def create_summary_table(all_results):
     return pd.DataFrame(rows)
 
 
-def main():
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
+def main(
+    benchmark_dir: str = "./benchmark_results", output_dir: str = "./benchmark_plots"
+):
+    os.makedirs(output_dir, exist_ok=True)
 
-    all_results = load_results()
+    all_results = load_results(benchmark_dir)
 
     if not all_results:
         print("No benchmark results found")
@@ -186,12 +184,12 @@ def main():
     for dataset, methods in all_results.items():
         print(f"  {dataset}: {list(methods.keys())}")
 
-    methods_order = ["vanilla", "grid_disabled", "grid_last_gpu", "grid_last_cpu"]
+    methods_order = ["vanilla", "grid_naive", "grid_gpu", "grid_cpu"]
 
     for dataset, results in all_results.items():
         fig = plot_dataset(results, dataset, methods_order)
         fig.savefig(
-            os.path.join(OUTPUT_DIR, f"{dataset}_memory.png"),
+            os.path.join(output_dir, f"{dataset}_memory.png"),
             dpi=150,
             bbox_inches="tight",
         )
@@ -200,7 +198,7 @@ def main():
 
     fig_all = plot_all_datasets(all_results)
     fig_all.savefig(
-        os.path.join(OUTPUT_DIR, "all_datasets_memory.png"),
+        os.path.join(output_dir, "all_datasets_memory.png"),
         dpi=150,
         bbox_inches="tight",
     )
@@ -208,7 +206,7 @@ def main():
     print("Saved: all_datasets_memory.png")
 
     summary = create_summary_table(all_results)
-    summary_path = os.path.join(OUTPUT_DIR, "summary.csv")
+    summary_path = os.path.join(output_dir, "summary.csv")
     summary.to_csv(summary_path, index=False)
     print(f"Saved: summary.csv")
 
@@ -217,4 +215,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    tyro.cli(main)
