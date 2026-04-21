@@ -10,14 +10,10 @@ cleanup() {
 
 trap cleanup INT TERM
 
-# DATASETS=("bonsai" "kitchen" "garden" "room" "stump")
-DATASETS=("kitchen")
+DATASETS=("bonsai" "kitchen" "garden" "room" "stump")
 METHODS=("vanilla" "grid_naive" "grid_gpu" "grid_cpu")
-
-GRID_SIZE=5
-# ITERATIONS=5000
-ITERATIONS=100
-# SYNC_INTERVAL=250
+ITERATIONS=5000
+SYNC_INTERVAL=250
 SYNC_INTERVAL=100
 MIN_GAUSSIANS=50
 IMAGES_SUBDIR="images_4"
