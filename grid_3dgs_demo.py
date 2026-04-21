@@ -9,6 +9,7 @@ from gs.io.colmap import load
 from gs.trainers.grid.config import GridTrainConfig
 from gs.trainers.grid.train import train as grid_train
 
+
 def get_save_path(dataset_path: str, save_path: str) -> str:
     # Helper function to get save path
     if save_path is None:
@@ -20,7 +21,8 @@ def get_save_path(dataset_path: str, save_path: str) -> str:
         save_path = os.path.join(save_folder, save_filename)
     return save_path
 
-def train_grid_3dgs(dataset_path: str, save_path: Union[str, None]=None):
+
+def train_grid_3dgs(dataset_path: str, save_path: Union[str, None] = None):
     """
     Train a 3D Gaussian Splatting model on a dataset.
     """
@@ -30,12 +32,10 @@ def train_grid_3dgs(dataset_path: str, save_path: Union[str, None]=None):
 
     # Create configuration for training
     config = GridTrainConfig(
-        grid_config=Grid(
-            grid_size=50
-        ),
+        grid_config=Grid(grid_size=50),
         min_gaussians=1,
-        preview_camera=cameras[0], # Camera to preview during training with OpenCV
-        sync_interval=250, # How often to change which model we are training
+        preview_camera=None,  # Set to cameras[0] for OpenCV preview (requires display)
+        sync_interval=250,  # How often to change which model we are training
     )
 
     # Create initial Gaussian model
@@ -51,6 +51,7 @@ def train_grid_3dgs(dataset_path: str, save_path: Union[str, None]=None):
 
     print(f"Model saved to {save_path}")
 
+
 if __name__ == "__main__":
-    dataset_path = "./datasets/mip_nerf_360/kitchen"
+    dataset_path = "./datasets/kitchen"
     train_grid_3dgs(dataset_path)

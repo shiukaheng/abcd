@@ -8,6 +8,7 @@ from gs.io.colmap import load
 from gs.trainers.basic.config import BasicTrainConfig
 from gs.trainers.basic.train import train as basic_train
 
+
 def get_save_path(dataset_path: str, save_path: str) -> str:
     # Helper function to get save path
     if save_path is None:
@@ -19,7 +20,8 @@ def get_save_path(dataset_path: str, save_path: str) -> str:
         save_path = os.path.join(save_folder, save_filename)
     return save_path
 
-def train_3dgs(dataset_path: str, save_path: Union[str, None]=None):
+
+def train_3dgs(dataset_path: str, save_path: Union[str, None] = None):
     """
     Train a 3D Gaussian Splatting model on a dataset.
     """
@@ -29,7 +31,7 @@ def train_3dgs(dataset_path: str, save_path: Union[str, None]=None):
 
     # Create configuration for training
     config = BasicTrainConfig(
-        preview_camera=cameras[0],
+        preview_camera=None,  # Set to cameras[0] for OpenCV preview (requires display)
     )
 
     # Create initial Gaussian model
@@ -44,6 +46,7 @@ def train_3dgs(dataset_path: str, save_path: Union[str, None]=None):
     output_model.save_ply(save_path)
 
     print(f"Model saved to {save_path}")
+
 
 if __name__ == "__main__":
     dataset_path = "./datasets/mip_nerf_360/kitchen"

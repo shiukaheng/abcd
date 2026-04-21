@@ -7,17 +7,29 @@ from gs.io.colmap.COLMAPView import COLMAPView
 from gs.helpers.image import pil_to_torch
 from gs.helpers.transforms import qvec_to_rotmat
 from gs.io.colmap.COLMAPPointCloud import COLMAPPointCloud
-from gs.io.colmap.camera_parsing import get_fov, read_extrinsics_binary, read_extrinsics_text, read_intrinsics_binary, read_intrinsics_text
+from gs.io.colmap.camera_parsing import (
+    get_fov,
+    read_extrinsics_binary,
+    read_extrinsics_text,
+    read_intrinsics_binary,
+    read_intrinsics_text,
+)
 from PIL import Image
 
-from gs.io.colmap.sparse_parsing import fetchPly, read_points3D_binary, read_points3D_text, storePly
+from gs.io.colmap.sparse_parsing import (
+    fetchPly,
+    read_points3D_binary,
+    read_points3D_text,
+    storePly,
+)
 
 """
 This module contains the main functions for loading COLMAP models.
 """
 
+
 def load(path: str) -> Tuple[List[COLMAPView], COLMAPPointCloud]:
-    '''
+    """
     Loads a COLMAP model from a path, returns (List[Camera], PointCloud)
 
     Expects folder structure:
@@ -29,10 +41,11 @@ def load(path: str) -> Tuple[List[COLMAPView], COLMAPPointCloud]:
         images/
             <image_name>.jpg
             ...
-    '''
+    """
     cameras = load_cameras(path)
     sparse_points = load_sparse_points(path)
     return cameras, sparse_points
+
 
 def load_cameras(path: str) -> List[COLMAPView]:
     try:
@@ -45,39 +58,56 @@ def load_cameras(path: str) -> List[COLMAPView]:
         cameras_intrinsic_file = os.path.join(path, "sparse/0", "cameras.txt")
         camera_extrinsics = read_extrinsics_text(cameras_extrinsic_file)
         camera_intrinsics = read_intrinsics_text(cameras_intrinsic_file)
-    
+
     # Now, we use the intermediate format to create Camera objects
     images_folder = os.path.join(path, "images")
     cameras = []
 
     pbar = tqdm(camera_extrinsics, desc="Loading cameras")
     for idx, key in enumerate(pbar):
-        extrinsics = camera_extrinsics[key] # We first get the extrinsics
-        intrinsics = camera_intrinsics[extrinsics.camera_id] # Then we get the intrinsics
+        extrinsics = camera_extrinsics[key]  # We first get the extrinsics
+        intrinsics = camera_intrinsics[
+            extrinsics.camera_id
+        ]  # Then we get the intrinsics
 
         R = np.transpose(qvec_to_rotmat(extrinsics.qvec))
         t = np.array(extrinsics.tvec)
 
         fov_x, fov_y = get_fov(intrinsics)
         image_path = os.path.join(images_folder, os.path.basename(extrinsics.name))
-        # replace .arw with .jpg (hack)
+        # replace .arw/.rd with .jpg, and handle case where .JPG needs to become .jpg
+        # but the file actually exists with uppercase extension
+        image_path_original = image_path
         image_path = image_path.replace(".arw", ".jpg").replace(".rd", ".jpg")
-        with warnings.catch_warnings(): # Suppress EXIF warnings .. "Corrupt EXIF data"
+        # If lowercase path doesn't exist, try the original (handles .JPG files)
+        if not os.path.exists(image_path):
+            image_path = image_path_original
+        with warnings.catch_warnings():  # Suppress EXIF warnings .. "Corrupt EXIF data"
             warnings.simplefilter("ignore")
             pil_image = Image.open(image_path)
         image = pil_to_torch(pil_image)
-        
+
         # Point indexes = indexes of extrinsics.points3D_ids that are not -1
         point_indexes = np.where(extrinsics.point3D_ids != -1)[0]
 
         # Originally, we convert to CameraInfo, but this is so convoluted. Lets just directly convert to image
         camera = COLMAPView(
-            R, t, fov_x, fov_y, pil_image.height, pil_image.width, idx, image, image_path, point_indexes
+            R,
+            t,
+            fov_x,
+            fov_y,
+            pil_image.height,
+            pil_image.width,
+            idx,
+            image,
+            image_path,
+            point_indexes,
         )
 
         cameras.append(camera)
     pbar.close()
     return cameras
+
 
 def load_sparse_points(path: str) -> COLMAPPointCloud:
     ply_path = os.path.join(path, "sparse/0/points3D.ply")
