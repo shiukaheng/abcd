@@ -54,6 +54,7 @@ def train(
     )
 
     # We train each cell in the grid for sync_interval iterations
+    global_iteration = 0
     while all(
         cell.current_iter < c.iterations for cell in grid_model.grid_iter()
     ):  # While there are cells that have not reached the target iteration
@@ -92,7 +93,9 @@ def train(
             visible_cameras = grid_model.grid_get_visible_cameras_from_cell(
                 cell.index
             )  # Get the cameras that can see the cell
-            basic_train(grid_model, visible_cameras, c_cell, viewer)
+            iterations_this_round = target_iteration - cell.current_iter
+            basic_train(grid_model, visible_cameras, c_cell, viewer, global_iteration)
+            global_iteration += iterations_this_round
 
             cell.clean_model_edges()
             bounding_box_viz.remove()

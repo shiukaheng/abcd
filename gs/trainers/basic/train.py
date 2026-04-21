@@ -12,6 +12,7 @@ from gs.helpers.image import torch_to_cv2, torch_to_numpy, torch_to_pil
 from gs.helpers.loss import mix_l1_ssim_loss, l2_loss
 from gs.helpers.scene import estimate_scene_scale
 from gs.helpers.training import get_expon_lr_func
+from gs.profiling import log_iteration
 from gs.trainers.basic.config import BasicTrainConfig
 from gs.trainers.basic.dynamic_parameters import (
     densify,
@@ -40,6 +41,7 @@ def train(
     _viewer: Union[
         None, Viewer
     ] = None,  # If this training loop is chained with another, we can pass the viewer to avoid creating a new one.
+    global_iteration_offset: int = 0,
 ):
     """
     This is the most basic trainer for Gaussian splatting. It mirrors the original training logic.
@@ -209,6 +211,8 @@ def train(
             optimizer.zero_grad(
                 set_to_none=True
             )  # We zero the gradients so they do not accumulate to the next iteration.
+
+            log_iteration(i + global_iteration_offset)
 
             viewer.render_once()
 
