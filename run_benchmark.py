@@ -8,7 +8,7 @@ import tyro
 from gs.core.GaussianModel import GaussianModel
 from gs.geometry.grid import Grid
 from gs.io.colmap import load
-from gs.profiling import MemoryMonitor, TrainingContext
+from gs.profiling import Logger
 from gs.trainers.basic.config import BasicTrainConfig
 from gs.trainers.basic.train import train as basic_train
 from gs.trainers.grid.config import GridTrainConfig
@@ -35,8 +35,7 @@ def run_benchmark(
     os.makedirs(output, exist_ok=True)
 
     model_path = os.path.join(output, "model.ply")
-    training_csv_path = os.path.join(output, "training.csv")
-    memory_csv_path = os.path.join(output, "memory.csv")
+    log_path = os.path.join(output, "benchmark.jsonl")
 
     print(f"\n{'=' * 60}")
     print(f"Running: {dataset} / {method}")
@@ -51,86 +50,84 @@ def run_benchmark(
 
     pid = os.getpid()
 
-    with MemoryMonitor(pid, memory_csv_path, interval_ms=100):
-        with TrainingContext(training_csv_path):
-            if method == "vanilla":
-                config = BasicTrainConfig(
-                    iterations=iterations,
-                    preview_camera=None,
-                    densify_interval=densify_interval,
-                    densify_from_iter=densify_from_iter,
-                    densify_until_iter=densify_until_iter,
-                    densify_grad_threshold=densify_grad_threshold,
-                    opacity_threshold=opacity_threshold,
-                    split_n_samples=split_n_samples,
-                    split_shrink_factor=split_shrink_factor,
-                )
-                input_model = GaussianModel.from_point_cloud(sparse)
-                output_model = basic_train(input_model, cameras, config)
-            elif method == "grid_naive":
-                config = GridTrainConfig(
-                    iterations=iterations,
-                    grid_config=Grid(grid_size=grid_size),
-                    min_gaussians=min_gaussians,
-                    preview_camera=None,
-                    sync_interval=sync_interval,
-                    extra_cell_compensation="disabled",
-                    precomposite_enabled=False,
-                    densify_interval=densify_interval,
-                    densify_from_iter=densify_from_iter,
-                    densify_until_iter=densify_until_iter,
-                    densify_grad_threshold=densify_grad_threshold,
-                    opacity_threshold=opacity_threshold,
-                    split_n_samples=split_n_samples,
-                    split_shrink_factor=split_shrink_factor,
-                )
-                input_model = GaussianModel.from_point_cloud(sparse)
-                output_model = grid_train(input_model, cameras, config)
-            elif method == "grid_gpu":
-                config = GridTrainConfig(
-                    iterations=iterations,
-                    grid_config=Grid(grid_size=grid_size),
-                    min_gaussians=min_gaussians,
-                    preview_camera=None,
-                    sync_interval=sync_interval,
-                    extra_cell_compensation="last",
-                    precomposite_enabled=True,
-                    precomposite_storage="gpu",
-                    densify_interval=densify_interval,
-                    densify_from_iter=densify_from_iter,
-                    densify_until_iter=densify_until_iter,
-                    densify_grad_threshold=densify_grad_threshold,
-                    opacity_threshold=opacity_threshold,
-                    split_n_samples=split_n_samples,
-                    split_shrink_factor=split_shrink_factor,
-                )
-                input_model = GaussianModel.from_point_cloud(sparse)
-                output_model = grid_train(input_model, cameras, config)
-            elif method == "grid_cpu":
-                config = GridTrainConfig(
-                    iterations=iterations,
-                    grid_config=Grid(grid_size=grid_size),
-                    min_gaussians=min_gaussians,
-                    preview_camera=None,
-                    sync_interval=sync_interval,
-                    extra_cell_compensation="last",
-                    precomposite_enabled=True,
-                    precomposite_storage="cpu",
-                    densify_interval=densify_interval,
-                    densify_from_iter=densify_from_iter,
-                    densify_until_iter=densify_until_iter,
-                    densify_grad_threshold=densify_grad_threshold,
-                    opacity_threshold=opacity_threshold,
-                    split_n_samples=split_n_samples,
-                    split_shrink_factor=split_shrink_factor,
-                )
-                input_model = GaussianModel.from_point_cloud(sparse)
-                output_model = grid_train(input_model, cameras, config)
+    with Logger(pid, log_path, interval_ms=100):
+        if method == "vanilla":
+            config = BasicTrainConfig(
+                iterations=iterations,
+                preview_camera=None,
+                densify_interval=densify_interval,
+                densify_from_iter=densify_from_iter,
+                densify_until_iter=densify_until_iter,
+                densify_grad_threshold=densify_grad_threshold,
+                opacity_threshold=opacity_threshold,
+                split_n_samples=split_n_samples,
+                split_shrink_factor=split_shrink_factor,
+            )
+            input_model = GaussianModel.from_point_cloud(sparse)
+            output_model = basic_train(input_model, cameras, config)
+        elif method == "grid_naive":
+            config = GridTrainConfig(
+                iterations=iterations,
+                grid_config=Grid(grid_size=grid_size),
+                min_gaussians=min_gaussians,
+                preview_camera=None,
+                sync_interval=sync_interval,
+                extra_cell_compensation="disabled",
+                precomposite_enabled=False,
+                densify_interval=densify_interval,
+                densify_from_iter=densify_from_iter,
+                densify_until_iter=densify_until_iter,
+                densify_grad_threshold=densify_grad_threshold,
+                opacity_threshold=opacity_threshold,
+                split_n_samples=split_n_samples,
+                split_shrink_factor=split_shrink_factor,
+            )
+            input_model = GaussianModel.from_point_cloud(sparse)
+            output_model = grid_train(input_model, cameras, config)
+        elif method == "grid_gpu":
+            config = GridTrainConfig(
+                iterations=iterations,
+                grid_config=Grid(grid_size=grid_size),
+                min_gaussians=min_gaussians,
+                preview_camera=None,
+                sync_interval=sync_interval,
+                extra_cell_compensation="last",
+                precomposite_enabled=True,
+                precomposite_storage="gpu",
+                densify_interval=densify_interval,
+                densify_from_iter=densify_from_iter,
+                densify_until_iter=densify_until_iter,
+                densify_grad_threshold=densify_grad_threshold,
+                opacity_threshold=opacity_threshold,
+                split_n_samples=split_n_samples,
+                split_shrink_factor=split_shrink_factor,
+            )
+            input_model = GaussianModel.from_point_cloud(sparse)
+            output_model = grid_train(input_model, cameras, config)
+        elif method == "grid_cpu":
+            config = GridTrainConfig(
+                iterations=iterations,
+                grid_config=Grid(grid_size=grid_size),
+                min_gaussians=min_gaussians,
+                preview_camera=None,
+                sync_interval=sync_interval,
+                extra_cell_compensation="last",
+                precomposite_enabled=True,
+                precomposite_storage="cpu",
+                densify_interval=densify_interval,
+                densify_from_iter=densify_from_iter,
+                densify_until_iter=densify_until_iter,
+                densify_grad_threshold=densify_grad_threshold,
+                opacity_threshold=opacity_threshold,
+                split_n_samples=split_n_samples,
+                split_shrink_factor=split_shrink_factor,
+            )
+            input_model = GaussianModel.from_point_cloud(sparse)
+            output_model = grid_train(input_model, cameras, config)
 
     output_model.save_ply(model_path)
     print(f"Model saved to {model_path}")
-    print(f"Training log: {training_csv_path}")
-    print(f"Memory log: {memory_csv_path}")
+    print(f"Log: {log_path}")
 
 
 if __name__ == "__main__":
