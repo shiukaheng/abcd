@@ -86,6 +86,67 @@ def _writer_loop(pid: int, output_path: str, interval_ms: int, queue: mp.Queue):
 
     target_process = psutil.Process(pid)
 
+    def _write_snapshot(f, start_time, target_process, gpu_handle, pid):
+        try:
+            ram_mb = target_process.memory_info().rss / 1024 / 1024
+        except psutil.NoSuchProcess:
+            return
+
+        vram_mb = 0.0
+        if gpu_handle is not None:
+            try:
+                procs = pynvml.nvmlDeviceGetComputeRunningProcesses(gpu_handle)
+                for proc in procs:
+                    if proc.pid == pid:
+                        vram_mb = proc.usedGpuMemory / 1024 / 1024
+                        break
+            except pynvml.NVMLError:
+                pass
+
+        elapsed = time.time() - start_time
+        f.write(
+            json.dumps(
+                {
+                    "type": "memory_snapshot",
+                    "timestamp_s": round(elapsed, 6),
+                    "ram_mb": round(ram_mb, 2),
+                    "vram_mb": round(vram_mb, 2),
+                },
+                sort_keys=True,
+            )
+            + "\n"
+        )
+        f.flush()
+
+    def _handle_queue_item(f, start_time, item):
+        entry_type = item[0]
+        if entry_type == "iteration":
+            _, timestamp, iteration = item
+            elapsed = timestamp - start_time
+            f.write(
+                json.dumps(
+                    {
+                        "type": "iteration",
+                        "timestamp_s": round(elapsed, 6),
+                        "iteration": iteration,
+                    },
+                    sort_keys=True,
+                )
+                + "\n"
+            )
+            f.flush()
+        elif entry_type == "event":
+            _, timestamp, message, kwargs = item
+            elapsed = timestamp - start_time
+            record = {
+                "type": "event",
+                "timestamp_s": round(elapsed, 6),
+                "message": message,
+            }
+            record.update(kwargs)
+            f.write(json.dumps(record, sort_keys=True) + "\n")
+            f.flush()
+
     with open(output_path, "w") as f:
         _write_snapshot(f, start_time, target_process, gpu_handle, pid)
 
@@ -103,66 +164,3 @@ def _writer_loop(pid: int, output_path: str, interval_ms: int, queue: mp.Queue):
             _write_snapshot(f, start_time, target_process, gpu_handle, pid)
 
             time.sleep(interval_ms / 1000)
-
-
-def _write_snapshot(f, start_time, target_process, gpu_handle, pid):
-    try:
-        ram_mb = target_process.memory_info().rss / 1024 / 1024
-    except psutil.NoSuchProcess:
-        return
-
-    vram_mb = 0.0
-    if gpu_handle is not None:
-        try:
-            procs = pynvml.nvmlDeviceGetComputeRunningProcesses(gpu_handle)
-            for proc in procs:
-                if proc.pid == pid:
-                    vram_mb = proc.usedGpuMemory / 1024 / 1024
-                    break
-        except pynvml.NVMLError:
-            pass
-
-    elapsed = time.time() - start_time
-    f.write(
-        json.dumps(
-            {
-                "type": "memory_snapshot",
-                "timestamp_s": round(elapsed, 6),
-                "ram_mb": round(ram_mb, 2),
-                "vram_mb": round(vram_mb, 2),
-            },
-            sort_keys=True,
-        )
-        + "\n"
-    )
-    f.flush()
-
-
-def _handle_queue_item(f, start_time, item):
-    entry_type = item[0]
-    if entry_type == "iteration":
-        _, timestamp, iteration = item
-        elapsed = timestamp - start_time
-        f.write(
-            json.dumps(
-                {
-                    "type": "iteration",
-                    "timestamp_s": round(elapsed, 6),
-                    "iteration": iteration,
-                },
-                sort_keys=True,
-            )
-            + "\n"
-        )
-        f.flush()
-    elif entry_type == "event":
-        _, timestamp, message, kwargs = item
-        elapsed = timestamp - start_time
-        record = {
-            "type": "event",
-            "timestamp_s": round(elapsed, 6),
-            "message": message,
-        }
-        record.update(kwargs)
-        f.write(json.dumps(record, sort_keys=True) + "\n")
-        f.flush()
