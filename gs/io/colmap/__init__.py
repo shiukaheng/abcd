@@ -5,6 +5,7 @@ import numpy as np
 from tqdm import tqdm
 from gs.io.colmap.COLMAPView import COLMAPView
 from gs.helpers.image import pil_to_torch
+from gs.profiling import log_tensor_set
 from gs.helpers.transforms import qvec_to_rotmat
 from gs.io.colmap.COLMAPPointCloud import COLMAPPointCloud
 from gs.io.colmap.camera_parsing import (
@@ -88,6 +89,7 @@ def load_cameras(path: str, images_subdir: str = "images") -> List[COLMAPView]:
             warnings.simplefilter("ignore")
             pil_image = Image.open(image_path)
         image = pil_to_torch(pil_image)
+        log_tensor_set(f"cam_{idx}.image", image, role="buffer")
 
         # Point indexes = indexes of extrinsics.points3D_ids that are not -1
         point_indexes = np.where(extrinsics.point3D_ids != -1)[0]

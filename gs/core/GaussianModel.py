@@ -5,11 +5,12 @@ import numpy as np
 import torch
 from torch import nn
 from gs.core.View import View, ViewWithRes
+from gs.core.BasePointCloud import BasePointCloud
 from diff_gaussian_rasterization import (
     GaussianRasterizationSettings,
     GaussianRasterizer,
 )
-from gs.core.BasePointCloud import BasePointCloud
+from gs.profiling import log_tensor_set
 from gs.geometry.bounding_box import BoundingBox
 from gs.helpers.math import create_scaled_sigmoid, inverse_sigmoid
 from gs.helpers.path import mkdir_p
@@ -296,7 +297,7 @@ class GaussianModel(nn.Module):
                 * torch.ones((positions.shape[0], 1), dtype=torch.float, device="cuda")
             )  # Set opacity to 0.1
 
-            return GaussianModel(
+            model = GaussianModel(
                 positions=positions,
                 sh_coefficients=sh_coefficients,
                 rotations=rotations,
@@ -306,6 +307,28 @@ class GaussianModel(nn.Module):
                 background_color=background_color,
                 scales_range=scales_range,
             )
+
+            for name in [
+                "positions",
+                "sh_coefficients_0",
+                "sh_coefficients_rest",
+                "rotations",
+                "scales",
+                "opacities",
+                "_gradient_accumulator",
+                "_gradient_accumulator_denominator",
+                "max_radii2D",
+                "background_color",
+            ]:
+                tensor = getattr(model, name)
+                if isinstance(tensor, torch.Tensor):
+                    log_tensor_set(
+                        f"model.{name}",
+                        tensor,
+                        role="parameter" if name != "background_color" else "buffer",
+                    )
+
+            return model
 
     # Convenience functions
 

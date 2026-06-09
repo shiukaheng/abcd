@@ -8,6 +8,7 @@ from gs.core.GaussianModel import GaussianModel
 from gs.geometry.bounding_box import BoundingBox
 from gs.geometry.grid import Grid, GridIndex
 from gs.compositing.alpha_compositing import composite_images_rgbda
+from gs.profiling import log_tensor_delete, log_tensor_set
 from gs.trainers.grid.forward_properties import forward_to_active_cell
 from gs.trainers.grid.grid_utils import cut, merge_model, split_model
 
@@ -205,6 +206,20 @@ class GridGaussianModel(Generic[T]):
                 cell.model.to(self.grid_model_store_device)
         self._active_cell_index = index
 
+        for i, cell in self.grid_cells.items():
+            prefix = f"cell_{cell.index}"
+            for name in [
+                "positions",
+                "sh_coefficients_0",
+                "sh_coefficients_rest",
+                "rotations",
+                "scales",
+                "opacities",
+            ]:
+                tensor = getattr(cell.model, name)
+                if isinstance(tensor, torch.Tensor):
+                    log_tensor_set(f"{prefix}.{name}", tensor, role="parameter")
+
     def grid_set_active_cell(self, cell: GridGaussianCell[T]):
         self.grid_set_active_cell_index(cell.index)
 
@@ -268,15 +283,30 @@ class GridGaussianModel(Generic[T]):
                     depth,
                     alpha,
                 )
+                key = f"cell_{self._active_cell_index}.prerender.{current_iter}.cam_{camera.id}"
+                log_tensor_set(
+                    key,
+                    rgb,
+                    role="prerender",
+                )
 
     def grid_cull_active_cell_prerenders(self, older_than: int):
         if self._active_cell_index is None:
             raise ValueError("No active cell is set.")
         for iteration in list(self.grid_active_cell.prerenders.keys()):
             if iteration < older_than:
+                for cam_id in list(self.grid_active_cell.prerenders[iteration].keys()):
+                    log_tensor_delete(
+                        f"cell_{self._active_cell_index}.prerender.{iteration}.cam_{cam_id}",
+                        reason="culled",
+                    )
                 del self.grid_active_cell.prerenders[iteration]
 
     def grid_clear_precomposited_layers(self):
+        for cam_id in list(self._precomposited_bg.keys()):
+            log_tensor_delete(f"cam_{cam_id}.precomp_bg", reason="cleared")
+        for cam_id in list(self._precomposited_fg.keys()):
+            log_tensor_delete(f"cam_{cam_id}.precomp_fg", reason="cleared")
         self._precomposited_bg.clear()
         self._precomposited_fg.clear()
 
@@ -382,6 +412,12 @@ class GridGaussianModel(Generic[T]):
                         dummy_alpha,
                     )
 
+                log_tensor_set(
+                    f"cam_{camera.id}.precomp_bg",
+                    self._precomposited_bg[camera.id][0],
+                    role="precomposite",
+                )
+
                 if len(fg_layers) > 0:
                     fg_layers.sort(key=lambda x: -x[1])
                     fg_only = [layer[0] for layer in fg_layers]
@@ -410,6 +446,12 @@ class GridGaussianModel(Generic[T]):
                         dummy_depth,
                         dummy_alpha,
                     )
+
+                log_tensor_set(
+                    f"cam_{camera.id}.precomp_fg",
+                    self._precomposited_fg[camera.id][0],
+                    role="precomposite",
+                )
 
     def forward(
         self,

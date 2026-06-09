@@ -164,3 +164,24 @@ def _writer_loop(pid: int, output_path: str, interval_ms: int, queue: mp.Queue):
             _write_snapshot(f, start_time, target_process, gpu_handle, pid)
 
             time.sleep(interval_ms / 1000)
+
+
+def log_tensor_set(key: str, tensor, role: str = "resident"):
+    import torch
+
+    if not isinstance(tensor, torch.Tensor):
+        return
+    log_event(
+        "tensor",
+        event="set",
+        key=key,
+        shape=list(tensor.shape),
+        dtype=str(tensor.dtype),
+        device=str(tensor.device),
+        bytes=tensor.numel() * tensor.element_size(),
+        role=role,
+    )
+
+
+def log_tensor_delete(key: str, reason: str = "unknown"):
+    log_event("tensor", event="delete", key=key, reason=reason)

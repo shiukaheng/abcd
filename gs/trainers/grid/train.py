@@ -5,6 +5,7 @@ from gs.core.GaussianModel import GaussianModel
 from gs.core.View import KnownView
 from gs.geometry.grid import Grid
 from gs.helpers.scene import estimate_scene_scale
+from gs.profiling import log_tensor_delete, log_tensor_set
 from gs.trainers.grid.config import AutoGridConfig, GridTrainConfig
 from gs.trainers.grid.GridGaussianModel import GridGaussianModel
 from gs.trainers.basic.train import train as basic_train
@@ -34,6 +35,18 @@ def train(
     # Split model into grid on its original device
     model.to(c.model_store_device)
 
+    for name in [
+        "positions",
+        "sh_coefficients_0",
+        "sh_coefficients_rest",
+        "rotations",
+        "scales",
+        "opacities",
+    ]:
+        tensor = getattr(model, name)
+        if isinstance(tensor, torch.Tensor):
+            log_tensor_set(f"model.{name}", tensor, role="parameter")
+
     # Calculate grid if required
 
     if isinstance(c.grid_config, Grid):
@@ -52,6 +65,30 @@ def train(
         precomposite_enabled=c.precomposite_enabled,
         precomposite_storage=c.precomposite_storage,
     )
+
+    for name in [
+        "positions",
+        "sh_coefficients_0",
+        "sh_coefficients_rest",
+        "rotations",
+        "scales",
+        "opacities",
+    ]:
+        log_tensor_delete(f"model.{name}", reason="split_into_cells")
+
+    for cell_idx, cell in enumerate(grid_model.grid_iter()):
+        prefix = f"cell_{cell.index}"
+        for name in [
+            "positions",
+            "sh_coefficients_0",
+            "sh_coefficients_rest",
+            "rotations",
+            "scales",
+            "opacities",
+        ]:
+            tensor = getattr(cell.model, name)
+            if isinstance(tensor, torch.Tensor):
+                log_tensor_set(f"{prefix}.{name}", tensor, role="parameter")
 
     # We train each cell in the grid for sync_interval iterations
     global_iteration = 0
@@ -116,6 +153,30 @@ def train(
 
     # Merge model from grid
     merged = grid_model.grid_merge()
+
+    for cell in grid_model.grid_iter():
+        prefix = f"cell_{cell.index}"
+        for name in [
+            "positions",
+            "sh_coefficients_0",
+            "sh_coefficients_rest",
+            "rotations",
+            "scales",
+            "opacities",
+        ]:
+            log_tensor_delete(f"{prefix}.{name}", reason="merged")
+
+    for name in [
+        "positions",
+        "sh_coefficients_0",
+        "sh_coefficients_rest",
+        "rotations",
+        "scales",
+        "opacities",
+    ]:
+        tensor = getattr(merged, name)
+        if isinstance(tensor, torch.Tensor):
+            log_tensor_set(f"merged.{name}", tensor, role="parameter")
 
     print("Training complete!")
     print(f"Iterations per cell: {c.iterations}")

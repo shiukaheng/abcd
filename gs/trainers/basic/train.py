@@ -12,7 +12,7 @@ from gs.helpers.image import torch_to_cv2, torch_to_numpy, torch_to_pil
 from gs.helpers.loss import mix_l1_ssim_loss, l2_loss
 from gs.helpers.scene import estimate_scene_scale
 from gs.helpers.training import get_expon_lr_func
-from gs.profiling import log_iteration
+from gs.profiling import log_iteration, log_tensor_set
 from gs.trainers.basic.config import BasicTrainConfig
 from gs.trainers.basic.dynamic_parameters import (
     densify,
@@ -49,6 +49,21 @@ def train(
 
     if c.model_train_device is not None:
         model.to(c.model_train_device)
+
+    for name in [
+        "positions",
+        "sh_coefficients_0",
+        "sh_coefficients_rest",
+        "rotations",
+        "scales",
+        "opacities",
+        "_gradient_accumulator",
+        "_gradient_accumulator_denominator",
+        "max_radii2D",
+    ]:
+        tensor = getattr(model, name)
+        if isinstance(tensor, torch.Tensor):
+            log_tensor_set(f"model.{name}", tensor, role="parameter")
 
     # Prepare model visualizer
     if _viewer is None:
@@ -134,6 +149,8 @@ def train(
         camera = train_cameras.pop()
         if c.camera_train_device is not None:
             camera.to(c.camera_train_device)
+        if hasattr(camera, "image") and camera.image is not None:
+            log_tensor_set(f"cam_{camera.id}.image", camera.image, role="buffer")
 
         # print(f"Training on camera {camera.id}, Iteration {i}")
 
@@ -175,6 +192,8 @@ def train(
 
         if c.camera_store_device is not None:
             camera.to(c.camera_store_device)
+        if hasattr(camera, "image") and camera.image is not None:
+            log_tensor_set(f"cam_{camera.id}.image", camera.image, role="buffer")
 
         with torch.no_grad():
             # Densification and culling

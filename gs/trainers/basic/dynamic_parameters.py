@@ -1,5 +1,6 @@
 import torch
 from gs.core.GaussianModel import GaussianModel
+from gs.profiling import log_tensor_set
 from torch import nn
 from gs.helpers.transforms import quat_to_rot
 
@@ -96,6 +97,18 @@ def append_new_gaussians(
     model._gradient_accumulator_denominator = torch.zeros((model.positions.shape[0], 1), device=device)
     model.max_radii2D = torch.zeros((model.positions.shape[0]), device=device).unsqueeze(1)
 
+    for name in [
+        "positions",
+        "sh_coefficients_0",
+        "sh_coefficients_rest",
+        "rotations",
+        "scales",
+        "opacities",
+    ]:
+        tensor = getattr(model, name)
+        if isinstance(tensor, torch.Tensor):
+            log_tensor_set(f"model.{name}", tensor, role="parameter")
+
 def check_mask_validity(mask: torch.Tensor, model: GaussianModel) -> None:
     """
     Checks if a mask is valid for the model or will lead to out-of-bounds errors.
@@ -145,6 +158,18 @@ def cull_gaussians(
     model._gradient_accumulator = model._gradient_accumulator[keep_mask]
     model._gradient_accumulator_denominator = model._gradient_accumulator_denominator[keep_mask]
     model.max_radii2D = model.max_radii2D[keep_mask]
+
+    for name in [
+        "positions",
+        "sh_coefficients_0",
+        "sh_coefficients_rest",
+        "rotations",
+        "scales",
+        "opacities",
+    ]:
+        tensor = getattr(model, name)
+        if isinstance(tensor, torch.Tensor):
+            log_tensor_set(f"model.{name}", tensor, role="parameter")
 
 def split_gaussians(
         model: GaussianModel,
