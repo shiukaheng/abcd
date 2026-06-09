@@ -6,6 +6,9 @@ import psutil
 
 
 class MemoryMonitor:
+    """
+    Monitors VRAM usage
+    """
     def __init__(self, pid: int, output_path: str, interval_ms: int = 100):
         self.pid = pid
         self.output_path = output_path
