@@ -9,7 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 DATASETS=("kitchen")  # "counter"
-METHODS=("vanilla" "grid_cpu")
+METHODS=("grid_cpu")
 ITERATIONS=5000
 SYNC_INTERVAL=1000
 GRID_SIZE=50
