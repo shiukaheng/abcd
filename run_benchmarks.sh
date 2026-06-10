@@ -22,8 +22,8 @@ DATASETS=("bicycle" "bonsai" "counter" "garden")
 CONFIGS=(
     "vanilla:vanilla:5000:1000:50:50"
     "grid_og:grid_cpu:5000:1000:50:50"
-    "grid_small:grid_cpu:5000:1000:25:50"
-    "grid_shortsync:grid_cpu:5000:500:50:50"
+    "grid_small:grid_cpu:5000:500:10:50"
+    "grid_smallb:grid_cpu:5000:1000:10:50"
 )
 
 # ─────────────────────── Shared hyperparameters ───────────────────────
