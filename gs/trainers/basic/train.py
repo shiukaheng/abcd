@@ -44,6 +44,7 @@ def train(
     global_iteration_offset: int = 0,
     aim_logger=None,
     num_inactive_gaussians: int = 0,
+    cell=None,
 ):
     """
     This is the most basic trainer for Gaussian splatting. It mirrors the original training logic.
@@ -237,7 +238,8 @@ def train(
             log_iteration(i + global_iteration_offset,
                           gaussians_loaded=n,
                           gaussians_total=n + num_inactive_gaussians,
-                          loss=loss.item())
+                          loss=loss.item(),
+                          cell=cell)
 
             if aim_logger is not None:
                 aim_logger.track(i + global_iteration_offset,

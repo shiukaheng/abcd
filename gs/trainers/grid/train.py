@@ -136,7 +136,8 @@ def train(
             total_scene = sum(c.model.positions.size(0) for c in grid_model.grid_iter())
             inactive_gaussians = total_scene - active_cell_count
             basic_train(grid_model, visible_cameras, c_cell, viewer, offset,
-                        aim_logger=aim_logger, num_inactive_gaussians=inactive_gaussians)
+                        aim_logger=aim_logger, num_inactive_gaussians=inactive_gaussians,
+                        cell=str(cell.index))
             global_iteration += iterations_this_round
 
             cell.clean_model_edges()

@@ -13,10 +13,10 @@ _logger_context: ContextVar[Optional["Logger"]] = ContextVar(
 )
 
 
-def log_iteration(iteration: int, gaussians_loaded=None, gaussians_total=None, loss=None):
+def log_iteration(iteration: int, gaussians_loaded=None, gaussians_total=None, loss=None, cell=None):
     ctx = _logger_context.get()
     if ctx is not None:
-        ctx._log_iteration(iteration, gaussians_loaded, gaussians_total, loss)
+        ctx._log_iteration(iteration, gaussians_loaded, gaussians_total, loss, cell)
 
 
 def log_event(message: str, **kwargs):
@@ -61,10 +61,10 @@ class Logger:
             _logger_context.reset(self._token)
         return False
 
-    def _log_iteration(self, iteration: int, gaussians_loaded=None, gaussians_total=None, loss=None):
+    def _log_iteration(self, iteration: int, gaussians_loaded=None, gaussians_total=None, loss=None, cell=None):
         if self._queue is not None:
             try:
-                self._queue.put_nowait(("iteration", time.time(), iteration, gaussians_loaded, gaussians_total, loss))
+                self._queue.put_nowait(("iteration", time.time(), iteration, gaussians_loaded, gaussians_total, loss, cell))
             except Full:
                 pass
 
@@ -124,13 +124,15 @@ def _writer_loop(pid: int, output_path: str, interval_ms: int, queue: mp.Queue):
     def _handle_queue_item(f, start_time, item):
         entry_type = item[0]
         if entry_type == "iteration":
-            _, timestamp, iteration, gaussians_loaded, gaussians_total, loss = item
+            _, timestamp, iteration, gaussians_loaded, gaussians_total, loss, cell = item
             elapsed = timestamp - start_time
             record = {
                 "type": "iteration",
                 "timestamp_s": round(elapsed, 6),
                 "iteration": iteration,
             }
+            if cell is not None:
+                record["cell"] = cell
             if gaussians_loaded is not None:
                 record["gaussians_loaded"] = gaussians_loaded
             if gaussians_total is not None:
