@@ -239,7 +239,8 @@ def train(
                           gaussians_loaded=n,
                           gaussians_total=n + num_inactive_gaussians,
                           loss=loss.item(),
-                          cell=cell)
+                          cell=cell,
+                          cell_iteration=i)
 
             if aim_logger is not None:
                 aim_logger.track(i + global_iteration_offset,
