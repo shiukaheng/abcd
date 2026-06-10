@@ -87,6 +87,11 @@ for dataset in "${DATASETS[@]}"; do
                 --split-n-samples "$SPLIT_N_SAMPLES" \
                 --split-shrink-factor "$SPLIT_SHRINK_FACTOR"
         fi
+
+        echo "  → Generating plots..."
+        python scripts/plot_graphs.py \
+            --jsonl-path "${out_path}/benchmark.jsonl" \
+            --output-dir "${out_path}/plots" || true
     done
 done
 
