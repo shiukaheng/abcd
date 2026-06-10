@@ -233,10 +233,13 @@ def train(
                 set_to_none=True
             )  # We zero the gradients so they do not accumulate to the next iteration.
 
-            log_iteration(i + global_iteration_offset)
+            n = model.positions.size(0)
+            log_iteration(i + global_iteration_offset,
+                          gaussians_loaded=n,
+                          gaussians_total=n + num_inactive_gaussians,
+                          loss=loss.item())
 
             if aim_logger is not None:
-                n = model.positions.size(0)
                 aim_logger.track(i + global_iteration_offset,
                                  gaussians_loaded=n,
                                  gaussians_total=n + num_inactive_gaussians)

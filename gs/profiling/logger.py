@@ -13,10 +13,10 @@ _logger_context: ContextVar[Optional["Logger"]] = ContextVar(
 )
 
 
-def log_iteration(iteration: int):
+def log_iteration(iteration: int, gaussians_loaded=None, gaussians_total=None, loss=None):
     ctx = _logger_context.get()
     if ctx is not None:
-        ctx._log_iteration(iteration)
+        ctx._log_iteration(iteration, gaussians_loaded, gaussians_total, loss)
 
 
 def log_event(message: str, **kwargs):
@@ -61,10 +61,10 @@ class Logger:
             _logger_context.reset(self._token)
         return False
 
-    def _log_iteration(self, iteration: int):
+    def _log_iteration(self, iteration: int, gaussians_loaded=None, gaussians_total=None, loss=None):
         if self._queue is not None:
             try:
-                self._queue.put_nowait(("iteration", time.time(), iteration))
+                self._queue.put_nowait(("iteration", time.time(), iteration, gaussians_loaded, gaussians_total, loss))
             except Full:
                 pass
 
@@ -124,19 +124,20 @@ def _writer_loop(pid: int, output_path: str, interval_ms: int, queue: mp.Queue):
     def _handle_queue_item(f, start_time, item):
         entry_type = item[0]
         if entry_type == "iteration":
-            _, timestamp, iteration = item
+            _, timestamp, iteration, gaussians_loaded, gaussians_total, loss = item
             elapsed = timestamp - start_time
-            f.write(
-                json.dumps(
-                    {
-                        "type": "iteration",
-                        "timestamp_s": round(elapsed, 6),
-                        "iteration": iteration,
-                    },
-                    sort_keys=True,
-                )
-                + "\n"
-            )
+            record = {
+                "type": "iteration",
+                "timestamp_s": round(elapsed, 6),
+                "iteration": iteration,
+            }
+            if gaussians_loaded is not None:
+                record["gaussians_loaded"] = gaussians_loaded
+            if gaussians_total is not None:
+                record["gaussians_total"] = gaussians_total
+            if loss is not None:
+                record["loss"] = round(loss, 8)
+            f.write(json.dumps(record, sort_keys=True) + "\n")
             f.flush()
         elif entry_type == "event":
             _, timestamp, message, kwargs = item
