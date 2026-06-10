@@ -133,6 +133,11 @@ def train(
             iterations_this_round = target_iteration - cell.current_iter
             offset = global_iteration - cell.current_iter
             active_cell_count = cell.model.positions.size(0)
+            if active_cell_count == 0:
+                print(f"  Skipping empty cell {cell.index}")
+                cell.current_iter = c.iterations
+                bounding_box_viz.remove()
+                continue
             total_scene = sum(c.model.positions.size(0) for c in grid_model.grid_iter())
             inactive_gaussians = total_scene - active_cell_count
             basic_train(grid_model, visible_cameras, c_cell, viewer, offset,
