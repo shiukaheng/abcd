@@ -91,10 +91,7 @@ def train(
                 log_tensor_set(f"{prefix}.{name}", tensor, role="parameter")
 
     # We train each cell in the grid for sync_interval iterations
-    cell_offsets = {
-        cell.index: idx * c.iterations
-        for idx, cell in enumerate(grid_model.grid_iter())
-    }
+    global_iteration = 0
     while all(
         cell.current_iter < c.iterations for cell in grid_model.grid_iter()
     ):  # While there are cells that have not reached the target iteration
@@ -133,7 +130,10 @@ def train(
             visible_cameras = grid_model.grid_get_visible_cameras_from_cell(
                 cell.index
             )  # Get the cameras that can see the cell
-            basic_train(grid_model, visible_cameras, c_cell, viewer, cell_offsets[cell.index], aim_logger=aim_logger)
+            iterations_this_round = target_iteration - cell.current_iter
+            offset = global_iteration - cell.current_iter
+            basic_train(grid_model, visible_cameras, c_cell, viewer, offset, aim_logger=aim_logger)
+            global_iteration += iterations_this_round
 
             cell.clean_model_edges()
             bounding_box_viz.remove()
@@ -151,7 +151,7 @@ def train(
 
             if aim_logger is not None:
                 total = sum(cell.model.positions.size(0) for cell in grid_model.grid_iter())
-                aim_logger.track(cell_offsets[cell.index] + target_iteration, gaussians_total=total)
+                aim_logger.track(global_iteration, gaussians_total=total)
 
             # # Ask user to continue
             # input("Press Enter to continue...")
