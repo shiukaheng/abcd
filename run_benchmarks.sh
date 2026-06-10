@@ -20,10 +20,10 @@ DATASETS=("bicycle" "bonsai" "counter" "garden")
 #   grid_size     – grid only; side length of each spatial cell
 #   min_gaussians – grid only; minimum gaussians per cell
 CONFIGS=(
-    "vanilla:vanilla:5000:250:50:50"
-    "grid_og:grid_cpu:5000:250:50:50"
-    "grid_small:grid_cpu:5000:250:25:50"
-    "grid_longsync:grid_cpu:5000:1000:50:50"
+    "vanilla:vanilla:5000:1000:50:50"
+    "grid_og:grid_cpu:5000:1000:50:50"
+    "grid_small:grid_cpu:5000:1000:25:50"
+    "grid_shortsync:grid_cpu:5000:500:50:50"
 )
 
 # ─────────────────────── Shared hyperparameters ───────────────────────
