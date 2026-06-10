@@ -43,6 +43,7 @@ def train(
     ] = None,  # If this training loop is chained with another, we can pass the viewer to avoid creating a new one.
     global_iteration_offset: int = 0,
     aim_logger=None,
+    num_inactive_gaussians: int = 0,
 ):
     """
     This is the most basic trainer for Gaussian splatting. It mirrors the original training logic.
@@ -238,7 +239,7 @@ def train(
                 n = model.positions.size(0)
                 aim_logger.track(i + global_iteration_offset,
                                  gaussians_loaded=n,
-                                 gaussians_total=n)
+                                 gaussians_total=n + num_inactive_gaussians)
 
             viewer.render_once()
 

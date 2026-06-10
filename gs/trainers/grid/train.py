@@ -132,7 +132,11 @@ def train(
             )  # Get the cameras that can see the cell
             iterations_this_round = target_iteration - cell.current_iter
             offset = global_iteration - cell.current_iter
-            basic_train(grid_model, visible_cameras, c_cell, viewer, offset, aim_logger=aim_logger)
+            active_cell_count = cell.model.positions.size(0)
+            total_scene = sum(c.model.positions.size(0) for c in grid_model.grid_iter())
+            inactive_gaussians = total_scene - active_cell_count
+            basic_train(grid_model, visible_cameras, c_cell, viewer, offset,
+                        aim_logger=aim_logger, num_inactive_gaussians=inactive_gaussians)
             global_iteration += iterations_this_round
 
             cell.clean_model_edges()
@@ -148,10 +152,6 @@ def train(
 
             # Update the cell to notifiy that it has been trained
             cell.current_iter = target_iteration
-
-            if aim_logger is not None:
-                total = sum(cell.model.positions.size(0) for cell in grid_model.grid_iter())
-                aim_logger.track(global_iteration, gaussians_total=total)
 
             # # Ask user to continue
             # input("Press Enter to continue...")
