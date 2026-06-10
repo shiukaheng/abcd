@@ -54,6 +54,9 @@ class Logger:
             self._process.join(timeout=5)
             if self._process.is_alive():
                 self._process.terminate()
+        if self._queue is not None:
+            self._queue.close()
+            self._queue.cancel_join_thread()
         if self._token is not None:
             _logger_context.reset(self._token)
         return False
