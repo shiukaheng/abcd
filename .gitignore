@@ -177,3 +177,7 @@ samples/
 
 benchmark_results/
 benchmark_plots/
+
+# Aim experiment tracker
+.aim/
+new_eval/

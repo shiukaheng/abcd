@@ -4,11 +4,12 @@ from typing import Literal
 
 import torch
 import tyro
+from aim import Run
 
 from gs.core.GaussianModel import GaussianModel
 from gs.geometry.grid import Grid
 from gs.io.colmap import load
-from gs.profiling import Logger
+from gs.profiling import AimLogger, Logger
 from gs.trainers.basic.config import BasicTrainConfig
 from gs.trainers.basic.train import train as basic_train
 from gs.trainers.grid.config import GridTrainConfig
@@ -50,6 +51,20 @@ def run_benchmark(
 
     pid = os.getpid()
 
+    aim_run = Run()
+    aim_run["hparams"] = {
+        "dataset": dataset,
+        "method": method,
+        "iterations": iterations,
+        "grid_size": grid_size,
+        "sync_interval": sync_interval,
+        "min_gaussians": min_gaussians,
+        "densify_interval": densify_interval,
+        "densify_from_iter": densify_from_iter,
+        "densify_until_iter": densify_until_iter,
+    }
+    aim_logger = AimLogger(aim_run)
+
     with Logger(pid, log_path, interval_ms=100):
         if method == "vanilla":
             config = BasicTrainConfig(
@@ -64,7 +79,7 @@ def run_benchmark(
                 split_shrink_factor=split_shrink_factor,
             )
             input_model = GaussianModel.from_point_cloud(sparse)
-            output_model = basic_train(input_model, cameras, config)
+            output_model = basic_train(input_model, cameras, config, aim_logger=aim_logger)
         elif method == "grid_naive":
             config = GridTrainConfig(
                 iterations=iterations,
@@ -83,7 +98,7 @@ def run_benchmark(
                 split_shrink_factor=split_shrink_factor,
             )
             input_model = GaussianModel.from_point_cloud(sparse)
-            output_model = grid_train(input_model, cameras, config)
+            output_model = grid_train(input_model, cameras, config, aim_logger=aim_logger)
         elif method == "grid_gpu":
             config = GridTrainConfig(
                 iterations=iterations,
@@ -103,7 +118,7 @@ def run_benchmark(
                 split_shrink_factor=split_shrink_factor,
             )
             input_model = GaussianModel.from_point_cloud(sparse)
-            output_model = grid_train(input_model, cameras, config)
+            output_model = grid_train(input_model, cameras, config, aim_logger=aim_logger)
         elif method == "grid_cpu":
             config = GridTrainConfig(
                 iterations=iterations,
@@ -123,9 +138,10 @@ def run_benchmark(
                 split_shrink_factor=split_shrink_factor,
             )
             input_model = GaussianModel.from_point_cloud(sparse)
-            output_model = grid_train(input_model, cameras, config)
+            output_model = grid_train(input_model, cameras, config, aim_logger=aim_logger)
 
     output_model.save_ply(model_path)
+    aim_run.close()
     print(f"Model saved to {model_path}")
     print(f"Log: {log_path}")
 

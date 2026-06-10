@@ -126,7 +126,7 @@ to see at <200k Gaussians.
 - Removed old `new_eval/counter/` and `eval/` artifacts
 - All eval output now goes to `new_eval/{dataset}/{method}/`
 
-## Files changed (commits: `f1cbc77`, `cd353ab`)
+## Files changed (commits: `f1cbc77`, `cd353ab`, `3205d7f`, `xxx`)
 
 ```
 UNIFY:     gs/profiling/logger.py        (Logger class replaces MemoryMonitor/TrainingContext)
@@ -143,6 +143,14 @@ TENSOR LOG: gs/core/GaussianModel.py     (from_point_cloud logging)
             memory_analysis.md           (tensor inventory)
             scripts/jsonl_to_trace.py    (trace converter)
             poc_test.sh                  (benchmark runner)
+            june_10.md                   (session notes)
+
+AIM:        gs/profiling/aim_logger.py   (AimLogger wrapper)
+            gs/profiling/__init__.py     (AimLogger export)
+            gs/trainers/basic/train.py   (gaussians_loaded/total per iteration)
+            gs/trainers/grid/train.py    (gaussians_total across all cells)
+            run_benchmark.py             (Run creation, hparams, aim_logger)
+            .gitignore                   (.aim/ + new_eval/)
 ```
 
 ## Next steps / todo
@@ -155,3 +163,25 @@ TENSOR LOG: gs/core/GaussianModel.py     (from_point_cloud logging)
 - [ ] Test `grid_gpu` method for VRAM comparison
 - [ ] Fix `model.*` double-counting in grid traces (densify logs `model.*`
       which overlaps with `cell_*.*`)
+- [x] Add Aim experiment tracker for per-iteration Gaussians metrics
+- [ ] Run `poc_test.sh` with counter dataset for second data point
+
+## Aim integration (amended)
+
+Installed `aim==3.29.1` and created `gs/profiling/aim_logger.py`. Two metrics logged:
+- `gaussians_loaded` — number of Gaussians on GPU (vanilla = full model; grid = active cell)
+- `gaussians_total` — total Gaussians in scene
+
+`run_benchmark.py` creates an Aim `Run` with hparams (dataset, method, iterations,
+grid_size, etc.) and passes `AimLogger` to train functions. `basic_train` logs
+`gaussians_loaded` and `gaussians_total` per iteration. `grid_train` overrides
+`gaussians_total` after each cell round with the sum across all cells.
+
+`aim up` opens the dashboard at `http://localhost:43800`. View metrics in Metrics
+Explorer to compare vanilla vs grid_cpu — vanilla's `gaussians_loaded` climbs to
+~241K while grid's stays at the active cell size (~70K), even though
+`gaussians_total` climbs identically.
+
+**Note:** Aim Python SDK read-back API (`get()`, `iter_metrics_info()`) is broken
+in this env (Python 3.11 compatibility), but writing works and the UI reads data
+correctly via its internal query engine.

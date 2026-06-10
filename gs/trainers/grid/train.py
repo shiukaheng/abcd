@@ -13,7 +13,7 @@ from gs.visualization.Viewer import Viewer
 
 
 def train(
-    model: GaussianModel, cameras: List[KnownView], c: GridTrainConfig, _viewer=None
+    model: GaussianModel, cameras: List[KnownView], c: GridTrainConfig, _viewer=None, aim_logger=None
 ):
     try:
         model.assert_validity()
@@ -131,7 +131,7 @@ def train(
                 cell.index
             )  # Get the cameras that can see the cell
             iterations_this_round = target_iteration - cell.current_iter
-            basic_train(grid_model, visible_cameras, c_cell, viewer, global_iteration)
+            basic_train(grid_model, visible_cameras, c_cell, viewer, global_iteration, aim_logger=aim_logger)
             global_iteration += iterations_this_round
 
             cell.clean_model_edges()
@@ -147,6 +147,10 @@ def train(
 
             # Update the cell to notifiy that it has been trained
             cell.current_iter = target_iteration
+
+            if aim_logger is not None:
+                total = sum(cell.model.positions.size(0) for cell in grid_model.grid_iter())
+                aim_logger.track(global_iteration, gaussians_total=total)
 
             # # Ask user to continue
             # input("Press Enter to continue...")
