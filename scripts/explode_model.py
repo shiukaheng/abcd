@@ -92,8 +92,12 @@ def explode_model(
     viewer.set_model(exploded_model)
 
     for cell_index, (_, cell_bb) in cells.items():
-        offset = cell_offsets[cell_index].cpu()
-        cpu_bb = BoundingBox(min=cell_bb.min.cpu() + offset, max=cell_bb.max.cpu() + offset)
+        offset = cell_offsets[cell_index].detach().cpu()
+        cpu_bb = BoundingBox(
+            min=cell_bb.min.detach().clone().cpu(),
+            max=cell_bb.max.detach().clone().cpu(),
+        )
+        cpu_bb = cpu_bb + offset
         viewer.add_bounding_box_boundary(cpu_bb, color=(100, 100, 255), line_width=2)
 
     viewer.start(threaded=False)
