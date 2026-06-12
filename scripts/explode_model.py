@@ -98,7 +98,7 @@ def explode_model(
             max=cell_bb.max.detach().clone().cpu(),
         )
         cpu_bb = cpu_bb + offset
-        viewer.add_bounding_box_boundary(cpu_bb, color=(100, 100, 255), line_width=2)
+        viewer.add_bounding_box_boundary(cpu_bb, color=(255, 255, 255), line_width=2)
 
     viewer.start(threaded=False)
 
