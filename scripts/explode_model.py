@@ -4,6 +4,7 @@ import tyro
 from typing import Optional
 
 from gs.core.GaussianModel import GaussianModel
+from gs.geometry.bounding_box import BoundingBox
 from gs.geometry.grid import Grid
 from gs.trainers.grid.grid_utils import merge_model, split_model
 from gs.visualization.Viewer import Viewer
@@ -66,6 +67,8 @@ def explode_model(
     print(f"Merged exploded model: {total_gs} gaussians across {len(cells)} cells")
 
     if output is not None:
+        output = os.path.abspath(output)
+        os.makedirs(os.path.dirname(output), exist_ok=True) if os.path.dirname(output) else None
         exploded_model.save_ply(output)
         print(f"Saved exploded model to {output}")
 
@@ -85,7 +88,8 @@ def explode_model(
     viewer.set_model(exploded_model)
 
     for _, (_, cell_bb) in cells.items():
-        viewer.add_bounding_box_boundary(cell_bb, color=(100, 100, 255), line_width=2)
+        cpu_bb = BoundingBox(min=cell_bb.min.cpu(), max=cell_bb.max.cpu())
+        viewer.add_bounding_box_boundary(cpu_bb, color=(100, 100, 255), line_width=2)
 
     viewer.start(threaded=False)
 
