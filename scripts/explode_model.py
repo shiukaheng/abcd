@@ -47,6 +47,7 @@ def explode_model(
     model_center = model.calculate_bounding_box().center
 
     shown = min(20, len(cells))
+    cell_offsets = {}
     for i, (cell_index, (cell_model, cell_bb)) in enumerate(cells.items()):
         cell_center = cell_bb.center
         direction = cell_center - model_center
@@ -54,6 +55,9 @@ def explode_model(
         if norm > 1e-6:
             offset = (direction / norm) * gap
             cell_model.positions.data += offset
+        else:
+            offset = torch.zeros(3, device=device)
+        cell_offsets[cell_index] = offset
 
         if i < shown:
             num = cell_model.positions.size(0)
@@ -87,8 +91,9 @@ def explode_model(
     viewer = Viewer(auto_start=False)
     viewer.set_model(exploded_model)
 
-    for _, (_, cell_bb) in cells.items():
-        cpu_bb = BoundingBox(min=cell_bb.min.cpu(), max=cell_bb.max.cpu())
+    for cell_index, (_, cell_bb) in cells.items():
+        offset = cell_offsets[cell_index].cpu()
+        cpu_bb = BoundingBox(min=cell_bb.min.cpu() + offset, max=cell_bb.max.cpu() + offset)
         viewer.add_bounding_box_boundary(cpu_bb, color=(100, 100, 255), line_width=2)
 
     viewer.start(threaded=False)
