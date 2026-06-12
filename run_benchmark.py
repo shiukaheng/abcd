@@ -32,6 +32,7 @@ def run_benchmark(
     opacity_threshold: float = 0.005,
     split_n_samples: int = 2,
     split_shrink_factor: float = 0.8,
+    preview: str | None = None,
 ):
     os.makedirs(output, exist_ok=True)
 
@@ -48,6 +49,16 @@ def run_benchmark(
     gc.collect()
 
     cameras, sparse = load(dataset, images_subdir)
+
+    if preview is None:
+        preview_camera = None
+    elif preview == "all":
+        preview_camera = "all"
+    elif preview.isdigit():
+        idx = int(preview)
+        preview_camera = cameras[idx]
+    else:
+        preview_camera = None
 
     pid = os.getpid()
 
@@ -69,7 +80,7 @@ def run_benchmark(
         if method == "vanilla":
             config = BasicTrainConfig(
                 iterations=iterations,
-                preview_camera=None,
+                preview_camera=preview_camera,
                 densify_interval=densify_interval,
                 densify_from_iter=densify_from_iter,
                 densify_until_iter=densify_until_iter,
@@ -85,7 +96,7 @@ def run_benchmark(
                 iterations=iterations,
                 grid_config=Grid(grid_size=grid_size),
                 min_gaussians=min_gaussians,
-                preview_camera=None,
+                preview_camera=preview_camera,
                 sync_interval=sync_interval,
                 extra_cell_compensation="disabled",
                 precomposite_enabled=False,
@@ -104,7 +115,7 @@ def run_benchmark(
                 iterations=iterations,
                 grid_config=Grid(grid_size=grid_size),
                 min_gaussians=min_gaussians,
-                preview_camera=None,
+                preview_camera=preview_camera,
                 sync_interval=sync_interval,
                 extra_cell_compensation="last",
                 precomposite_enabled=True,
@@ -124,7 +135,7 @@ def run_benchmark(
                 iterations=iterations,
                 grid_config=Grid(grid_size=grid_size),
                 min_gaussians=min_gaussians,
-                preview_camera=None,
+                preview_camera=preview_camera,
                 sync_interval=sync_interval,
                 extra_cell_compensation="last",
                 precomposite_enabled=True,
