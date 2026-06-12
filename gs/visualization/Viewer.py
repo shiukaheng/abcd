@@ -1,3 +1,4 @@
+import math
 import time
 from typing import Generic, List, Literal, NamedTuple, Tuple, TypeVar, Union
 import uuid
@@ -132,6 +133,7 @@ class Viewer(Generic[T]):
         frame_rate=15,
         reuse_viser=True,
         auto_start=True,
+        fov=0.87266,
     ):
         # Initialize the viewer
         self.model = None
@@ -158,6 +160,7 @@ class Viewer(Generic[T]):
             target=self.render_loop, daemon=True
         )  # Thread for the rendering loop
         self.width = width  # Width of the rendered images
+        self.fov = fov
 
         if auto_start:
             self.start(threaded=True)
@@ -259,6 +262,24 @@ class Viewer(Generic[T]):
         @stop_button.on_click
         def on_stop_button_click(client: viser.ClientHandle):
             self.stop()
+
+        fov_slider = self.viser.add_gui_slider(
+            "FOV (deg)",
+            min=1.0,
+            max=120.0,
+            step=0.5,
+            initial_value=math.degrees(self.fov),
+        )
+
+        def update_client_fov(client: viser.ClientHandle):
+            client.camera.fov = math.radians(fov_slider.value)
+
+        def on_fov_change(gui_event: viser.GuiEvent):
+            for client in self.viser.get_clients().values():
+                client.camera.fov = math.radians(fov_slider.value)
+
+        fov_slider.on_update(on_fov_change)
+        self.viser.on_client_connect(update_client_fov)
 
         if threaded:
             if not self.render_thread.is_alive():

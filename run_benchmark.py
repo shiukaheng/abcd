@@ -33,6 +33,7 @@ def run_benchmark(
     split_n_samples: int = 2,
     split_shrink_factor: float = 0.8,
     preview: str | None = None,
+    extra_cell_compensation: str | None = None,
 ):
     os.makedirs(output, exist_ok=True)
 
@@ -131,13 +132,14 @@ def run_benchmark(
             input_model = GaussianModel.from_point_cloud(sparse)
             output_model = grid_train(input_model, cameras, config, aim_logger=aim_logger)
         elif method == "grid_cpu":
+            compensation = extra_cell_compensation if extra_cell_compensation is not None else "last"
             config = GridTrainConfig(
                 iterations=iterations,
                 grid_config=Grid(grid_size=grid_size),
                 min_gaussians=min_gaussians,
                 preview_camera=preview_camera,
                 sync_interval=sync_interval,
-                extra_cell_compensation="last",
+                extra_cell_compensation=compensation,
                 precomposite_enabled=True,
                 precomposite_storage="cpu",
                 densify_interval=densify_interval,

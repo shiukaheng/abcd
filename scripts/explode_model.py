@@ -44,19 +44,11 @@ def explode_model(
         print("No cells with gaussians found. Try lowering --min-gaussians.")
         return
 
-    model_center = model.calculate_bounding_box().center
-
     shown = min(20, len(cells))
     cell_offsets = {}
     for i, (cell_index, (cell_model, cell_bb)) in enumerate(cells.items()):
-        cell_center = cell_bb.center
-        direction = cell_center - model_center
-        norm = torch.norm(direction)
-        if norm > 1e-6:
-            offset = (direction / norm) * gap
-            cell_model.positions.data += offset
-        else:
-            offset = torch.zeros(3, device=device)
+        offset = torch.tensor([cell_index.x, cell_index.y, cell_index.z], device=device) * gap
+        cell_model.positions.data += offset
         cell_offsets[cell_index] = offset
 
         if i < shown:

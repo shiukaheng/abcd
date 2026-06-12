@@ -55,6 +55,7 @@ for dataset in "${DATASETS[@]}"; do
         echo "[$current/$total] $dataset :: $cfg_name  ($method, iters=$iters, sync=$sync, grid=$grid)"
         mkdir -p "$out_path"
 
+        set +e
         if [ "$method" = "vanilla" ]; then
             uv run python run_benchmark.py \
                 --dataset "./datasets/$dataset" \
@@ -87,11 +88,16 @@ for dataset in "${DATASETS[@]}"; do
                 --split-n-samples "$SPLIT_N_SAMPLES" \
                 --split-shrink-factor "$SPLIT_SHRINK_FACTOR"
         fi
-
-        echo "  → Generating plots..."
-        python scripts/plot_graphs.py \
-            --jsonl-path "${out_path}/benchmark.jsonl" \
-            --output-dir "${out_path}/plots" || true
+        rc=$?
+        set -e
+        if [ $rc -ne 0 ]; then
+            echo "  ⚠  FAILED (exit code $rc) — continuing"
+        else
+            echo "  → Generating plots..."
+            python scripts/plot_graphs.py \
+                --jsonl-path "${out_path}/benchmark.jsonl" \
+                --output-dir "${out_path}/plots" || true
+        fi
     done
 done
 
