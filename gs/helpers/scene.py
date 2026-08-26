@@ -1,5 +1,7 @@
 from typing import List
+
 import torch
+
 from gs.core.View import View
 
 
@@ -9,7 +11,7 @@ def estimate_scene_scale(cameras: List[View], inflation_factor: float = 1.1):
     Larger scene sizes lead to larger step sizes in optimization.
     """
     positions = [camera.center for camera in cameras]
-    positions = torch.vstack(positions) # (N, 3)
-    center = torch.mean(positions, dim=0) # (3,)
-    distances_to_center = torch.norm(positions - center, dim=1) # (N,)
+    positions = torch.vstack(positions)  # (N, 3)
+    center = torch.mean(positions, dim=0)  # (3,)
+    distances_to_center = torch.norm(positions - center, dim=1)  # (N,)
     return torch.max(distances_to_center) * inflation_factor

@@ -1,14 +1,16 @@
 import math
-from typing import Generic, Tuple, TypeVar, Union
+from typing import Generic, Tuple, TypeVar
+
 import numpy as np
 import torch
 import torch.nn as nn
-from gs.geometry.bounding_box import BoundingBox
+
 from gs.geometry.frustum import Frustum
 from gs.helpers.transforms import get_projection_matrix, get_world_to_view
 
 ZFAR = 100.0
 ZNEAR = 0.01
+
 
 class View(nn.Module):
     """
@@ -17,20 +19,18 @@ class View(nn.Module):
 
     world_view_transform: torch.Tensor
     full_proj_transform: torch.Tensor
-    center: torch.Tensor # (3,)
-    look_at: torch.Tensor # (3,)
+    center: torch.Tensor  # (3,)
+    look_at: torch.Tensor  # (3,)
 
-    def __init__(
-        self,
-        R: np.ndarray,
-        t: np.ndarray,
-        fov_x: float,
-        fov_y: float
-    ):
+    def __init__(self, R: np.ndarray, t: np.ndarray, fov_x: float, fov_y: float):
         super().__init__()
         world_view_transform = torch.tensor(get_world_to_view(R, t)).transpose(0, 1)
-        projection_matrix = get_projection_matrix(znear=ZNEAR, zfar=ZFAR, fovX=fov_x, fovY=fov_y).transpose(0, 1)
-        full_proj_transform = (world_view_transform.unsqueeze(0).bmm(projection_matrix.unsqueeze(0))).squeeze(0)
+        projection_matrix = get_projection_matrix(
+            znear=ZNEAR, zfar=ZFAR, fovX=fov_x, fovY=fov_y
+        ).transpose(0, 1)
+        full_proj_transform = (
+            world_view_transform.unsqueeze(0).bmm(projection_matrix.unsqueeze(0))
+        ).squeeze(0)
         camera_center = world_view_transform.inverse()[3, :3]
         look_at = world_view_transform.inverse()[:3, 2]
 
@@ -56,12 +56,12 @@ class View(nn.Module):
         assert not torch.isinf(self.center).any()
         assert not torch.isinf(self.look_at).any()
 
-
     def __repr__(self):
         return f"CameraPose(center={self.center}, look_at={self.look_at}), fov_x={self.fov_x}, fov_y={self.fov_y}"
-    
+
     def __str__(self):
         return self.__repr__()
+
 
 class ViewWithRes(View):
     """
@@ -75,7 +75,7 @@ class ViewWithRes(View):
         fov_x: float,
         fov_y: float,
         image_height: int,
-        image_width: int
+        image_width: int,
     ):
         super().__init__(R, t, fov_x, fov_y)
         self.image_height = image_height
@@ -83,10 +83,10 @@ class ViewWithRes(View):
 
     def __repr__(self):
         return f"CameraPoseWithResolution(center={self.center}, look_at={self.look_at}, image_height={self.image_height}, image_width={self.image_width})"
-    
+
     def __str__(self):
         return self.__repr__()
-    
+
     def get_rays(self) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Generate the rays for the camera.
@@ -96,7 +96,11 @@ class ViewWithRes(View):
                         the direction of each ray.
         """
         # Generate pixel coordinates
-        i, j = torch.meshgrid(torch.arange(self.image_height), torch.arange(self.image_width), indexing='ij')
+        i, j = torch.meshgrid(
+            torch.arange(self.image_height),
+            torch.arange(self.image_width),
+            indexing="ij",
+        )
         i = i.float()
         j = j.float()
 
@@ -106,11 +110,16 @@ class ViewWithRes(View):
         z = torch.ones_like(x)  # For a pinhole camera model
 
         # Stack coordinates
-        pixel_coords = torch.stack([x, -y, z], dim=-1)  # Flip y for image coordinate system to NDC
+        pixel_coords = torch.stack(
+            [x, -y, z], dim=-1
+        )  # Flip y for image coordinate system to NDC
 
         # Unproject rays from NDC to world coordinates using the inverse of the projection matrix
         inv_projection_matrix = torch.inverse(self.full_proj_transform)
-        directions = torch.matmul(pixel_coords, inv_projection_matrix[:3, :3].T) + inv_projection_matrix[:3, 3]
+        directions = (
+            torch.matmul(pixel_coords, inv_projection_matrix[:3, :3].T)
+            + inv_projection_matrix[:3, 3]
+        )
 
         # Normalize the direction vectors
         directions = torch.nn.functional.normalize(directions, dim=-1)
@@ -119,14 +128,16 @@ class ViewWithRes(View):
         origins = self.center.expand(self.image_height, self.image_width, 3)
 
         return origins, directions
-    
-T = TypeVar('T')
-    
+
+
+T = TypeVar("T")
+
+
 class KnownView(ViewWithRes, Generic[T]):
     """
     Class representing a known camera, with an image and id. ID will be of type T.
     """
-    
+
     image: torch.Tensor
 
     def __init__(
@@ -138,7 +149,7 @@ class KnownView(ViewWithRes, Generic[T]):
         image_height: int,
         image_width: int,
         id: T,
-        image: torch.Tensor
+        image: torch.Tensor,
     ):
         super().__init__(R, t, fov_x, fov_y, image_height, image_width)
         self.id = id
@@ -146,6 +157,6 @@ class KnownView(ViewWithRes, Generic[T]):
 
     def __repr__(self):
         return f"KnownCamera(center={self.center}, look_at={self.look_at}, image_height={self.image_height}, image_width={self.image_width}, id={self.id})"
-    
+
     def __str__(self):
         return self.__repr__()

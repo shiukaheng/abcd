@@ -1,91 +1,159 @@
-# GridGaussians
+# ABCD: Alpha-Composited Block Coordinate Descent
 
-![demo](./images/demo.gif)
+ABCD trains large 3D Gaussian Splatting scenes out of core by optimizing one
+spatial partition at a time. Inactive partitions are stored on disk; their
+cached renders provide the foreground and background context for the active
+partition.
 
-GridGaussians is a method for training large 3D Gaussian splatting models that traditionally cannot fit into GPU memory without compromising on quality. We use a grid to split the model into smaller parts, and train each part separately. During the training of each grid cell, we composite still images of other cells to simulate the full model. This allows us to train models that are orders of magnitude larger than the GPU memory. 
+Paper: [SIGGRAPH Posters 2026](https://doi.org/10.1145/3799825.3818779)
 
-# 📦 Installing dependencies
+![ABCD training example](images/demo.gif)
 
-## Method 1: .devcontainer
+## Installation
 
-Devcontainers automatically recreate the development environment using Docker. It is mainly supported by VSCode but there is [also limited support for other editors](https://containers.dev/supporting).
-
-Requirements:
-- [Docker](https://docs.docker.com/desktop/install/linux-install/)
-- [nvidia-container-toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) (may also available on apt)
-- VSCode
-- [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
-
-When you open the repository you should be prompted to enter the container environment. First time running might take around 5 minutes to build the environment.
-
-## Method 2: UV Environment (Recommended - Python 3.11+)
-
-[UV](https://github.com/astral-sh/uv) is a fast Python package manager and environment manager.
+Requirements: Linux, Python 3.11, a CUDA-capable NVIDIA GPU compatible with
+PyTorch 2.3.1/CUDA 12.1, NVCC, a C++ compiler, and
+[uv](https://docs.astral.sh/uv/).
 
 ```bash
-# Install uv if not already installed
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Clone the repository
-git clone <repo-url>
-cd grid-gaussians
-
-# Sync all dependencies (creates virtual environment and installs everything)
-uv sync
-
-# Build CUDA submodules (requires torch to be installed first)
-uv run python build_submodule.py ./submodules/diff-gaussian-rasterization
-uv run python build_submodule.py ./submodules/simple-knn
-
-# Add submodules to Python path
-echo "$(pwd)/submodules/diff-gaussian-rasterization" > .venv/lib/python3.11/site-packages/submodules.pth
-echo "$(pwd)/submodules/simple-knn" >> .venv/lib/python3.11/site-packages/submodules.pth
+uv sync --frozen
+uv run python build_submodule.py submodules/diff-gaussian-rasterization
+uv run python build_submodule.py submodules/simple-knn
 ```
 
-After setup, use `uv run` to run Python scripts:
+The optional viewer is installed with `uv sync --frozen --extra viewer`.
+
+## Dataset
+
+The paper uses the Mip-NeRF 360 `garden` and `kitchen` scenes. Download the
+resized dataset with:
+
 ```bash
-uv run python grid_3dgs_demo.py
+./download_dataset.sh
 ```
 
-## Method 3: Local environment (tested on Python 3.8, Linux Mint 21.2)
-`NOTE: It is recommended to use conda to manage the environment.`
+Each scene must contain COLMAP sparse reconstruction files and an image
+directory, for example:
 
-- [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads)
-- `pip install numpy scipy torch torchvision torchaudio plyfile lpips pybind11 viser`
-- Installing PyBind11 submodules
-    - `pip install -e ./submodules/diff-gaussian-rasterization/`
-    - `pip install -e ./submodules/simple-knn/`
+```text
+scene/
+  images_4/
+  sparse/0/cameras.bin
+  sparse/0/images.bin
+  sparse/0/points3D.bin
+```
 
-# 🔗 Downloading the sample dataset
-The sampling dataset is from the MIP-NeRF 360 paper. For convenience, the images are resized and zipped.
-To download and extract the dataset, run `download_dataset.sh`
+Every eighth camera is held out by default. Training records the exact camera
+split in `run.json`; evaluation uses that same split.
 
-# 🏃‍♂️ Getting started
-For an example of how to train a 3DGS model using the grid-based training loop, run the following command:
+## Training
+
 ```bash
-python ./grid_3dgs_demo.py
+uv run abcd-train \
+  --dataset datasets/garden \
+  --output results/garden-abcd \
+  --method abcd \
+  --partition-size 5 \
+  --iterations 5000 \
+  --sync-interval 250 \
+  --seed 0
 ```
-During training, you can visualize the model using the web-based viewer which will be started automatically. The viewer can be accessed at `http://localhost:8080`.
 
-# 📄 Code structure
-The codebase is structured as follows:
-- `gs/`: The Gaussian splatting module.
-    - `compositing/`: Functions for compositing images in the grid-based training loop
-    - `core/`: Core data structures and functions for rendering 3DGS models
-        - `View.py`: Base classes for camera views used for training 3DGS models
-        - `BasePointCloud.py`: Base class for point clouds used for initializing 3DGS models
-        - `GaussianModel.py`: 3DGS model refactored as a nn.Module. Use `forward` with a camera to render the model
-    - `eval/`: Evaluation tools
-    - `geometry/`: Geometry helpers, including bounding boxes, frustums, grids, planes.
-    - `io/`: Functions for importing and exporting image and point cloud data
-        - `colmap/`: Functions for importing COLMAP reconstructions into `KnownView` and `BasePointCloud` compliant objects
-    - `trainers/`: Training scripts for 3DGS models
-        - `basic/`: Re-implementation of the original training loop
-        - `grid/`: Grid-based training loop that trains 3DGS models in parts 
-    - `visualization/`: Classes for visualizing 3DGS models
-        - `Viewer.py`: Class for starting a web-based 3DGS viewer for a `GaussianModel`
-    - `helpers/`: General functions for rendering and training 3DGS models\
+Supported methods are:
 
-# 🫂 Credits
-- [3D Gaussian splatting](https://github.com/graphdeco-inria/gaussian-splatting)
-- [Modified rasterization code from ashwakey to support depth and alpha channels](https://github.com/ashawkey/diff-gaussian-rasterization)
+- `abcd`: disk-backed alpha compositing.
+- `abcd-no-compositing`: the partitioned ablation.
+- `3dgs`: the unpartitioned baseline.
+
+Runs are headless by default and write `run.json`, `training.jsonl`,
+`model.ply`, and an ABCD `cache/` directory. Cached RGB and alpha use `uint8`;
+depth uses `float16`. Cache and shard writes are atomic and checksum-verified.
+Interrupted ABCD runs resume from the shard and optimizer checkpoints when
+restarted with the same configuration.
+
+## Evaluation
+
+```bash
+uv run abcd-evaluate \
+  --model results/garden-abcd/model.ply \
+  --dataset datasets/garden \
+  --output results/garden-abcd/evaluation.csv
+```
+
+Evaluation reports held-out per-view PSNR, SSIM, and LPIPS.
+
+## Reproduction
+
+Run the paper configuration for all methods and scenes:
+
+```bash
+uv run abcd-reproduce \
+  --dataset-root datasets \
+  --output results/siggraph_2026 \
+  --config configs/siggraph_2026.toml
+```
+
+The command reuses completed models and evaluations unless `--force` is given.
+It produces `results.json`, `results.csv`, and `comparison.png` in the output
+directory. Run `abcd-summarize` or `abcd-plot --help` for the individual steps.
+
+## Memory Model
+
+ABCD has three storage tiers:
+
+```text
+disk -> inactive partition checkpoints and cached renders
+RAM  -> active partition context and camera data
+VRAM -> one active partition, optimizer state, and one camera working set
+```
+
+For fixed image resolution, fixed partition volume, and bounded expected
+Gaussian density, peak training VRAM is `O(G_cell + H * W)`, where `G_cell` is
+the active partition's Gaussian count. This claim does not cover disk use,
+system RAM, camera count, runtime, or cells with unbounded density.
+
+Measure inactive-shard VRAM scaling with:
+
+```bash
+uv run abcd-memory --output release_checks/memory.json
+```
+
+The command holds active-shard size fixed across 1, 2, 4, and 8 partitions and
+fails when peak allocated VRAM spreads by 1 MiB or more.
+
+## Tests
+
+```bash
+uv sync --frozen --group dev
+uv run ruff format --check abcd gs tests build_submodule.py
+uv run ruff check abcd gs tests build_submodule.py
+uv run pyright
+uv run pytest
+```
+
+## Limitations
+
+- Gaussian ownership is assigned by mean, so covariance support may cross a
+  partition boundary.
+- Partition-center depth is an approximation for views where partitions cannot
+  be globally ordered.
+- The implementation targets one CUDA GPU.
+
+## License
+
+Original ABCD code is released under the MIT License. Bundled GraphDECO
+rasterizer and simple-knn code have separate non-commercial research and
+evaluation terms. See `LICENSE`, `THIRD_PARTY_NOTICES.md`, and the licenses in
+`submodules/`.
+
+## Citation
+
+```bibtex
+@inproceedings{shiu2026abcd,
+  title     = {ABCD: Alpha-Composited Block Coordinate Descent},
+  author    = {Shiu, Ka Heng and Subr, Kartic},
+  booktitle = {SIGGRAPH Posters},
+  year      = {2026},
+  doi       = {10.1145/3799825.3818779}
+}
+```

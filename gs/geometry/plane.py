@@ -12,7 +12,7 @@ class Plane(NamedTuple):
     def signed_distance(self, point: torch.Tensor) -> float:
         return torch.dot(self.normal, point) + self.d
 
-    def intersects_box(self, box: 'BoundingBox') -> bool:
+    def intersects_box(self, box: "BoundingBox") -> bool:
         """
         Check if a bounding box intersects with the plane using the separating axis theorem.
         """
@@ -25,14 +25,15 @@ class Plane(NamedTuple):
                 n_vertex[i] = box.min[i]
 
         # If the positive vertex is on or behind the plane, or the negative vertex is in front of the plane, they intersect
-        return self.signed_distance(p_vertex) >= 0 or self.signed_distance(n_vertex) <= 0
+        return (
+            self.signed_distance(p_vertex) >= 0 or self.signed_distance(n_vertex) <= 0
+        )
 
     def __str__(self) -> str:
         return f"Plane(normal={self.normal}, d={self.d})"
-    
-    def shift_scalar(self, offset: float) -> 'Plane':
+
+    def shift_scalar(self, offset: float) -> "Plane":
         """
         Shifts the plane along its normal by a given offset.
         """
         return Plane(normal=self.normal, d=self.d + offset)
-

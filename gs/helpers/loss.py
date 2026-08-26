@@ -13,10 +13,11 @@
 This module contains helper functions for loss computation.
 """
 
+from math import exp
+
 import torch
 import torch.nn.functional as F
 from torch.autograd import Variable
-from math import exp
 
 # LPIPS is imported lazily to avoid loading VGG when not needed
 lpips_func = None
@@ -150,4 +151,8 @@ def lpips_loss(predicted, target):
     """
     Learned Perceptual Image Patch Similarity (LPIPS) loss.
     """
-    return _get_lpips()(predicted, target)
+    if predicted.ndim == 3:
+        predicted = predicted.unsqueeze(0)
+    if target.ndim == 3:
+        target = target.unsqueeze(0)
+    return _get_lpips()(predicted * 2 - 1, target * 2 - 1).mean()

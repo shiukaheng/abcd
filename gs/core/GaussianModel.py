@@ -1,23 +1,20 @@
 import math
 import os
 from typing import List, Tuple, Union
+
 import numpy as np
 import torch
+from plyfile import PlyData, PlyElement
 from torch import nn
-from gs.core.View import View, ViewWithRes
+
 from gs.core.BasePointCloud import BasePointCloud
-from diff_gaussian_rasterization import (
-    GaussianRasterizationSettings,
-    GaussianRasterizer,
-)
-from gs.profiling import log_tensor_set
+from gs.core.View import ViewWithRes
 from gs.geometry.bounding_box import BoundingBox
 from gs.helpers.math import create_scaled_sigmoid, inverse_sigmoid
 from gs.helpers.path import mkdir_p
 from gs.helpers.spherical_harmonics import rgb_to_sh
 from gs.helpers.transforms import build_covariance_from_scaling_rotation
-from simple_knn._C import distCUDA2
-from plyfile import PlyData, PlyElement
+from gs.profiling import log_tensor_set
 
 
 class GaussianModel(nn.Module):
@@ -90,11 +87,17 @@ class GaussianModel(nn.Module):
 
         # Stats for densification
         # Initialize _gradient_accumulator to be of shape (N, 1) where N is the number of Gaussians
-        _gradient_accumulator = torch.zeros((positions.shape[0], 1))
-        _gradient_accumulator_denominator = torch.zeros((positions.shape[0], 1))
-        max_radii2D = torch.zeros((positions.shape[0], 1))
+        _gradient_accumulator = torch.zeros(
+            (positions.shape[0], 1), device=positions.device
+        )
+        _gradient_accumulator_denominator = torch.zeros(
+            (positions.shape[0], 1), device=positions.device
+        )
+        max_radii2D = torch.zeros((positions.shape[0], 1), device=positions.device)
 
-        self.register_buffer("background_color", background_color, persistent=True)
+        self.register_buffer(
+            "background_color", background_color.to(positions), persistent=True
+        )
         self.register_buffer(
             "_gradient_accumulator", _gradient_accumulator, persistent=True
         )
@@ -130,12 +133,23 @@ class GaussianModel(nn.Module):
         )
         try:
             self.viewspace_points.retain_grad()
-        except Exception as e:
+        except Exception:
             pass
 
         # Calculate camera stats
         tan_fov_x = math.tan(camera.fov_x * 0.5)
         tan_fov_y = math.tan(camera.fov_y * 0.5)
+
+        try:
+            from diff_gaussian_rasterization import (
+                GaussianRasterizationSettings,
+                GaussianRasterizer,
+            )
+        except ImportError as error:
+            raise RuntimeError(
+                "The CUDA rasterizer is not installed. Follow the native extension "
+                "installation instructions in README.md."
+            ) from error
 
         # Create rasterization settings
         raster_settings = GaussianRasterizationSettings(
@@ -194,6 +208,9 @@ class GaussianModel(nn.Module):
             self.radii[visible_gaussians].unsqueeze(1),
         )
 
+    def constrain_positions(self) -> None:
+        """Apply representation-specific position constraints after an update."""
+
     @property
     def sh_coefficients(self):
         return torch.cat([self.sh_coefficients_0, self.sh_coefficients_rest], dim=1)
@@ -225,6 +242,7 @@ class GaussianModel(nn.Module):
         background_color: torch.Tensor = torch.tensor([0, 0, 0], dtype=torch.float32),
         constant_scale: float = None,
         scales_range: Union[Tuple[float, float], None] = None,
+        device: str = "cuda",
     ):
         """
         Create GaussianModel from PointCloud. This is useful for converting PointClouds to GaussianModels, which can be rendered using rasterizer.
@@ -234,14 +252,20 @@ class GaussianModel(nn.Module):
             print(
                 f"Initializing GaussianModel from PointCloud with {len(pointcloud)} points"
             )
-            positions = torch.tensor(np.asarray(pointcloud.points)).float()
+            positions = torch.tensor(
+                np.asarray(pointcloud.points), dtype=torch.float32, device=device
+            )
 
             # Initialize spherical harmonics coefficients from RGB colors
             print("Calculating SH coefficients from RGB colors")
-            sh_0 = rgb_to_sh(torch.tensor(np.asarray(pointcloud.colors)).float())
+            sh_0 = rgb_to_sh(
+                torch.tensor(
+                    np.asarray(pointcloud.colors), dtype=torch.float32, device=device
+                )
+            )
             sh_coefficients = torch.zeros(
-                (sh_0.shape[0], 3, (sh_degree + 1) ** 2)
-            ).float()
+                (sh_0.shape[0], 3, (sh_degree + 1) ** 2), device=device
+            )
             sh_coefficients[:, :3, 0] = sh_0
             sh_coefficients = sh_coefficients.transpose(1, 2)
 
@@ -263,13 +287,21 @@ class GaussianModel(nn.Module):
                 )
                 assert not (torch.isnan(scales).any() or torch.isinf(scales).any())
             else:
+                try:
+                    from simple_knn._C import distCUDA2
+                except ImportError as error:
+                    raise RuntimeError(
+                        "simple-knn is not installed. Follow the native extension "
+                        "installation instructions in README.md."
+                    ) from error
+                if not positions.is_cuda:
+                    raise ValueError(
+                        "CUDA is required to infer initial Gaussian scales; pass "
+                        "constant_scale for CPU initialization"
+                    )
                 dist = torch.sqrt(
                     torch.clamp_min(
-                        distCUDA2(
-                            torch.from_numpy(np.asarray(pointcloud.points))
-                            .float()
-                            .cuda()
-                        ),
+                        distCUDA2(positions),
                         0.0000001,
                     )
                 )
@@ -283,7 +315,7 @@ class GaussianModel(nn.Module):
             # Initialize rotation
             print("Initializing rotations")
             rotations = torch.zeros(
-                (positions.shape[0], 4), device="cuda"
+                (positions.shape[0], 4), device=device
             )  # Create a tensor: (N, 4) for quaternions
             rotations[:, 0] = (
                 1  # Set the first column to 1, such that the rotation is identity
@@ -294,7 +326,7 @@ class GaussianModel(nn.Module):
             print("Initializing opacities")
             opacities = inverse_sigmoid(
                 0.1
-                * torch.ones((positions.shape[0], 1), dtype=torch.float, device="cuda")
+                * torch.ones((positions.shape[0], 1), dtype=torch.float, device=device)
             )  # Set opacity to 0.1
 
             model = GaussianModel(
@@ -336,7 +368,7 @@ class GaussianModel(nn.Module):
         """
         Clone the GaussianModel.
         """
-        return GaussianModel(
+        model = GaussianModel(
             positions=self.positions.clone(),
             sh_coefficients=self.sh_coefficients.clone(),
             rotations=self.rotations.clone(),
@@ -344,7 +376,14 @@ class GaussianModel(nn.Module):
             opacities=self.opacities.clone(),
             sh_degree=self.sh_degree,
             background_color=self.background_color.clone(),
+            scales_range=self.scales_range,
         )
+        model._gradient_accumulator = self._gradient_accumulator.clone()
+        model._gradient_accumulator_denominator = (
+            self._gradient_accumulator_denominator.clone()
+        )
+        model.max_radii2D = self.max_radii2D.clone()
+        return model
 
     def __len__(self):
         return self.positions.shape[0]
@@ -376,6 +415,11 @@ class GaussianModel(nn.Module):
                 background_color=self.background_color,
                 scales_range=self.scales_range,
             )
+            new_model._gradient_accumulator = self._gradient_accumulator[idx].clone()
+            new_model._gradient_accumulator_denominator = (
+                self._gradient_accumulator_denominator[idx].clone()
+            )
+            new_model.max_radii2D = self.max_radii2D[idx].clone()
 
             return new_model
         else:
@@ -439,6 +483,7 @@ class GaussianModel(nn.Module):
             background_color=models[
                 0
             ].background_color,  # Assuming all have the same background color
+            scales_range=models[0].scales_range,
         )
         return new_model
 
@@ -572,7 +617,7 @@ class GaussianModel(nn.Module):
         PlyData([element]).write(filename)
 
     @staticmethod
-    def from_ply(filename: str, sh_channels: int = 3):
+    def from_ply(filename: str, sh_channels: int = 3, device: str = "cpu"):
         plydata = PlyData.read(filename)
 
         # Extract positions
@@ -606,12 +651,30 @@ class GaussianModel(nn.Module):
             ],
             key=lambda x: int(x.split("_")[-1]),
         )
-        for name in extra_sh_names:
-            sh_coefficients_rest.append(np.asarray(plydata["vertex"][name]))
         num_gaussians = len(opacities)
-        sh_coefficients_rest = np.stack(sh_coefficients_rest, axis=1).reshape(
-            num_gaussians, -1, sh_channels
-        )
+        if len(extra_sh_names) % sh_channels != 0:
+            raise ValueError(
+                f"PLY contains {len(extra_sh_names)} non-DC SH values, which is "
+                f"not divisible by {sh_channels} channels"
+            )
+        coefficients_per_channel = 1 + len(extra_sh_names) // sh_channels
+        coefficient_side = math.isqrt(coefficients_per_channel)
+        if coefficient_side * coefficient_side != coefficients_per_channel:
+            raise ValueError(
+                f"PLY contains {coefficients_per_channel} SH coefficients per "
+                "channel; expected a perfect square"
+            )
+        sh_degree = coefficient_side - 1
+        if extra_sh_names:
+            for name in extra_sh_names:
+                sh_coefficients_rest.append(np.asarray(plydata["vertex"][name]))
+            sh_coefficients_rest = np.stack(sh_coefficients_rest, axis=1).reshape(
+                num_gaussians, -1, sh_channels
+            )
+        else:
+            sh_coefficients_rest = np.empty(
+                (num_gaussians, 0, sh_channels), dtype=positions.dtype
+            )
 
         # Extract scales and rotations
         scale_names = sorted(
@@ -638,18 +701,20 @@ class GaussianModel(nn.Module):
 
         # Create a new GaussianModel instance with the loaded parameters
         gaussian_model = GaussianModel(
-            positions=torch.tensor(positions, dtype=torch.float32).cuda(),
+            positions=torch.tensor(positions, dtype=torch.float32, device=device),
             sh_coefficients=torch.cat(
                 [
-                    torch.tensor(sh_coefficients_0, dtype=torch.float32).cuda(),
-                    torch.tensor(sh_coefficients_rest, dtype=torch.float32).cuda(),
+                    torch.tensor(sh_coefficients_0, dtype=torch.float32, device=device),
+                    torch.tensor(
+                        sh_coefficients_rest, dtype=torch.float32, device=device
+                    ),
                 ],
                 dim=1,
             ),
-            scales=torch.tensor(scales, dtype=torch.float32).cuda(),
-            rotations=torch.tensor(rotations, dtype=torch.float32).cuda(),
-            opacities=torch.tensor(opacities, dtype=torch.float32).cuda(),
-            sh_degree=sh_channels - 1,
+            scales=torch.tensor(scales, dtype=torch.float32, device=device),
+            rotations=torch.tensor(rotations, dtype=torch.float32, device=device),
+            opacities=torch.tensor(opacities, dtype=torch.float32, device=device),
+            sh_degree=sh_degree,
         )
 
         return gaussian_model

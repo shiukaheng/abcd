@@ -1,47 +1,62 @@
-from dataclasses import dataclass
-from typing import Generic, Literal, Tuple, Dict, List, TypeVar, Union, Optional
+import tempfile
+from typing import Dict, Generic, List, Literal, Tuple, TypeVar, Union
 
 import torch
 
-from gs.core.View import View, ViewWithRes, KnownView
+from gs.compositing.alpha_compositing import composite_images_rgbda
 from gs.core.GaussianModel import GaussianModel
+from gs.core.View import KnownView, View, ViewWithRes
 from gs.geometry.bounding_box import BoundingBox
 from gs.geometry.grid import Grid, GridIndex
-from gs.compositing.alpha_compositing import composite_images_rgbda
 from gs.profiling import log_tensor_delete, log_tensor_set
+from gs.trainers.basic.state import BasicTrainState
 from gs.trainers.grid.forward_properties import forward_to_active_cell
-from gs.trainers.grid.grid_utils import cut, merge_model, split_model
+from gs.trainers.grid.grid_utils import bounding_box_mask, merge_model, split_model
+from gs.trainers.grid.storage import (
+    CachedRender,
+    DirectoryRenderCache,
+    DirectoryShardStore,
+    ShardState,
+)
 
 T = TypeVar("T")
 
 
 class GridGaussianCell(Generic[T]):
     index: GridIndex
-    model: GaussianModel
+    model: GaussianModel | None
     bounding_box: BoundingBox
-    prerenders: Dict[int, Dict[T, Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]]
-    current_iter: int = 0
     grid: Grid
 
     def __init__(
         self,
         grid: Grid,
         index: GridIndex,
-        model: GaussianModel,
+        model: GaussianModel | None,
         bounding_box: BoundingBox,
+        render_cache: DirectoryRenderCache,
+        shard_store: DirectoryShardStore,
+        gaussian_count: int | None = None,
+        training_state: BasicTrainState | None = None,
     ):
         self.grid = grid
         self.index = index
         self.model = model
+        self.gaussian_count = len(model) if model is not None else gaussian_count or 0
         self.bounding_box = bounding_box
-        self.prerenders = {}
+        self.training_state = training_state or BasicTrainState()
+        self.render_cache = render_cache
+        self.shard_store = shard_store
         self.center = torch.mean(
             torch.stack([bounding_box.min, bounding_box.max]), dim=0
         )
 
     def plane_distance(self, camera: View) -> float:
-        return torch.dot(
-            self.center.to("cpu") - camera.center.to("cpu"), camera.look_at.to("cpu")
+        return float(
+            torch.dot(
+                self.center.to("cpu") - camera.center.to("cpu"),
+                camera.look_at.to("cpu"),
+            ).item()
         )
 
     def distance(self, camera: View) -> float:
@@ -52,12 +67,13 @@ class GridGaussianCell(Generic[T]):
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         if iteration is None:
             iteration = self.current_iter
-        prerender = self.prerenders.get(iteration, {}).get(camera.id, None)
-        if prerender is None:
+        try:
+            prerender = self.render_cache.load(self.index, camera.id, iteration)
+        except KeyError as error:
             raise ValueError(
                 f"Prerender for camera {camera.id} at iteration {iteration} is not available."
-            )
-        rgb, depth, alpha = prerender
+            ) from error
+        rgb, depth, alpha = prerender.rgb, prerender.depth, prerender.alpha
         rgb, depth, alpha = (
             rgb.to(torch.float32) / 255,
             depth.to(torch.float32),
@@ -65,8 +81,35 @@ class GridGaussianCell(Generic[T]):
         )
         return rgb, depth, alpha
 
+    @property
+    def current_iter(self) -> int:
+        return self.training_state.next_iteration
+
+    @current_iter.setter
+    def current_iter(self, value: int) -> None:
+        self.training_state.next_iteration = value
+
     def clean_model_edges(self):
-        self.model = cut(self.model, self.bounding_box)
+        if self.model is None:
+            raise ValueError(f"Cell {self.index} is not loaded")
+        mask = bounding_box_mask(self.model, self.bounding_box)
+        self.training_state.subset(mask)
+        self.model = self.model[mask]
+        self.gaussian_count = len(self.model)
+
+    def load(self) -> None:
+        if self.model is not None:
+            return
+        state = self.shard_store.load(self.index)
+        self.model = state.model
+        self.training_state = state.training
+        self.gaussian_count = len(self.model)
+
+    def store(self) -> None:
+        if self.model is None:
+            return
+        self.gaussian_count = len(self.model)
+        self.shard_store.store(self.index, ShardState(self.model, self.training_state))
 
 
 def split_to_grid_gaussian_cells(
@@ -123,13 +166,48 @@ class GridGaussianModel(Generic[T]):
         default_extra_cell_compensation: CompensationType = "uniform",
         precomposite_enabled: bool = True,
         precomposite_storage: PrecompositeStorage = "gpu",
+        cache_dir: str | None = None,
+        cache_fingerprint: str = "abcd-v1",
+        resume: bool = False,
     ):
-        self.grid_cells: Dict[GridIndex, GridGaussianCell[T]] = {
-            index: GridGaussianCell(
-                grid, index, cell_model, grid.get_bounding_box(index)
-            )
-            for index, cell_model in models.items()
-        }
+        if cache_dir is None:
+            cache_dir = tempfile.mkdtemp(prefix="abcd-cache-")
+        self.grid_cache_dir = cache_dir
+        self.render_cache = DirectoryRenderCache(cache_dir, cache_fingerprint)
+        self.shard_store = DirectoryShardStore(cache_dir, cache_fingerprint)
+        if resume:
+            descriptions = self.shard_store.descriptions()
+            if not descriptions:
+                raise ValueError(
+                    f"No resumable shards found in {self.shard_store.root}"
+                )
+            self.grid_cells = {
+                index: GridGaussianCell(
+                    grid,
+                    index,
+                    None,
+                    grid.get_bounding_box(index),
+                    self.render_cache,
+                    self.shard_store,
+                    gaussian_count=description["gaussian_count"],
+                    training_state=BasicTrainState(
+                        next_iteration=description["next_iteration"]
+                    ),
+                )
+                for index, description in descriptions.items()
+            }
+        else:
+            self.grid_cells = {
+                index: GridGaussianCell(
+                    grid,
+                    index,
+                    cell_model,
+                    grid.get_bounding_box(index),
+                    self.render_cache,
+                    self.shard_store,
+                )
+                for index, cell_model in models.items()
+            }
         self.grid_cameras = index_cameras_by_id(cameras)
         self._active_cell_index = None
         self.grid_model_store_device = model_store_device
@@ -141,18 +219,23 @@ class GridGaussianModel(Generic[T]):
         self._precomposite_storage_device = precomposite_storage
         self._precomposite_enabled = precomposite_enabled
 
+        if not resume:
+            for cell in self.grid_cells.values():
+                cell.store()
+                cell.model = None
+
         self.grid_calculate_visibility()
 
     def grid_calculate_visibility(self):
         self.camera_to_grid_visibility = {}
-        self.grid_to_camera_visibility = {}
+        self.grid_to_camera_visibility = {
+            cell.index: [] for cell in self.grid_cells.values()
+        }
         for camera in self.grid_cameras.values():
             self.camera_to_grid_visibility[camera.id] = []
             for cell in self.grid_cells.values():
                 if camera.frustum.intersects_bounding_box(cell.bounding_box):
                     self.camera_to_grid_visibility[camera.id].append(cell.index)
-                    if cell.index not in self.grid_to_camera_visibility:
-                        self.grid_to_camera_visibility[cell.index] = []
                     self.grid_to_camera_visibility[cell.index].append(camera.id)
 
     @staticmethod
@@ -166,11 +249,22 @@ class GridGaussianModel(Generic[T]):
         min_gaussians: int = 50,
         precomposite_enabled: bool = True,
         precomposite_storage: PrecompositeStorage = "gpu",
+        cache_dir: str | None = None,
+        cache_fingerprint: str = "abcd-v1",
+        resume: bool = False,
     ):
-        cells = split_to_grid_gaussian_cells(
-            input_model, grid, min_gaussians=min_gaussians
+        cells = (
+            {}
+            if resume
+            else split_to_grid_gaussian_cells(
+                input_model, grid, min_gaussians=min_gaussians
+            )
         )
-        print(f"Split model into {len(cells)} cells")
+        print(
+            "Resuming grid from disk"
+            if resume
+            else f"Split model into {len(cells)} cells"
+        )
         return GridGaussianModel(
             cells,
             cameras,
@@ -180,10 +274,15 @@ class GridGaussianModel(Generic[T]):
             default_extra_cell_compensation,
             precomposite_enabled,
             precomposite_storage,
+            cache_dir,
+            cache_fingerprint,
+            resume,
         )
 
     def grid_get(self, index: GridIndex) -> GaussianModel:
-        return self.grid_cells[index].model
+        cell = self.grid_cells[index]
+        cell.load()
+        return cell.model
 
     def grid_len(self) -> int:
         return len(self.grid_cells)
@@ -192,6 +291,10 @@ class GridGaussianModel(Generic[T]):
         return iter(self.grid_cells.values())
 
     def grid_merge(self, clean=True) -> GaussianModel:
+        if self._active_cell_index is not None:
+            self.grid_active_cell.store()
+        for cell in self.grid_cells.values():
+            cell.load()
         return merge_model(
             [(cell.model, cell.bounding_box) for cell in self.grid_cells.values()],
             self.grid_model_store_device,
@@ -199,14 +302,22 @@ class GridGaussianModel(Generic[T]):
         )
 
     def grid_set_active_cell_index(self, index: GridIndex):
-        for i, cell in self.grid_cells.items():
-            if i == index:
-                cell.model.to(self.grid_model_train_device)
-            else:
-                cell.model.to(self.grid_model_store_device)
+        if (
+            self._active_cell_index == index
+            and self.grid_cells[index].model is not None
+        ):
+            return
+        if self._active_cell_index is not None:
+            old_cell = self.grid_active_cell
+            old_cell.model.to(self.grid_model_store_device)
+            old_cell.store()
+            old_cell.model = None
+        active_cell = self.grid_cells[index]
+        active_cell.load()
+        active_cell.model.to(self.grid_model_train_device)
         self._active_cell_index = index
 
-        for i, cell in self.grid_cells.items():
+        for cell in [active_cell]:
             prefix = f"cell_{cell.index}"
             for name in [
                 "positions",
@@ -252,7 +363,7 @@ class GridGaussianModel(Generic[T]):
     def grid_calculate_newest_common_view_snapshot_iteration(self) -> int:
         newest_iterations = set()
         for cell in self.grid_cells.values():
-            keys = cell.prerenders.keys()
+            keys = self.render_cache.iterations(cell.index)
             if len(keys) == 0:
                 return -1
             newest_iterations.add(max(keys))
@@ -276,12 +387,11 @@ class GridGaussianModel(Generic[T]):
                     depth.to(torch.float16).cpu(),
                     (alpha * 255).to(torch.uint8).cpu(),
                 )
-                if current_iter not in self.grid_active_cell.prerenders:
-                    self.grid_active_cell.prerenders[current_iter] = {}
-                self.grid_active_cell.prerenders[current_iter][camera.id] = (
-                    rgb,
-                    depth,
-                    alpha,
+                self.render_cache.store(
+                    self._active_cell_index,
+                    camera.id,
+                    current_iter,
+                    CachedRender(rgb, depth, alpha),
                 )
                 key = f"cell_{self._active_cell_index}.prerender.{current_iter}.cam_{camera.id}"
                 log_tensor_set(
@@ -293,14 +403,7 @@ class GridGaussianModel(Generic[T]):
     def grid_cull_active_cell_prerenders(self, older_than: int):
         if self._active_cell_index is None:
             raise ValueError("No active cell is set.")
-        for iteration in list(self.grid_active_cell.prerenders.keys()):
-            if iteration < older_than:
-                for cam_id in list(self.grid_active_cell.prerenders[iteration].keys()):
-                    log_tensor_delete(
-                        f"cell_{self._active_cell_index}.prerender.{iteration}.cam_{cam_id}",
-                        reason="culled",
-                    )
-                del self.grid_active_cell.prerenders[iteration]
+        self.render_cache.remove_older_than(self._active_cell_index, older_than)
 
     def grid_clear_precomposited_layers(self):
         for cam_id in list(self._precomposited_bg.keys()):
@@ -355,7 +458,7 @@ class GridGaussianModel(Generic[T]):
         with torch.no_grad():
             for camera in visible_cameras:
                 in_view_cells = self.grid_get_visible_cells_from_camera(camera.id)
-                active_distance = active_cell.distance(camera)
+                active_distance = active_cell.plane_distance(camera)
 
                 bg_layers = []
                 fg_layers = []
@@ -371,7 +474,7 @@ class GridGaussianModel(Generic[T]):
                     except ValueError:
                         continue
 
-                    cell_distance = cell.distance(camera)
+                    cell_distance = cell.plane_distance(camera)
                     prerender_gpu = (
                         prerender[0].to(storage_device),
                         prerender[1].to(storage_device),
@@ -495,7 +598,7 @@ class GridGaussianModel(Generic[T]):
             )
             return composite
 
-        active_plane_distance = self.grid_active_cell.distance(camera)
+        active_plane_distance = self.grid_active_cell.plane_distance(camera)
 
         in_view_cells = self.grid_get_visible_cells_from_camera(camera.id)
 
@@ -514,7 +617,10 @@ class GridGaussianModel(Generic[T]):
             return active_rgb, active_depth, active_alpha
 
         prerendered_layers = [
-            (cell.get_prerender(camera, requested_iteration), cell.distance(camera))
+            (
+                cell.get_prerender(camera, requested_iteration),
+                cell.plane_distance(camera),
+            )
             for cell in in_view_cells
             if cell.current_iter != 0 and cell.index != self._active_cell_index
         ]
@@ -537,12 +643,22 @@ class GridGaussianModel(Generic[T]):
         composite = composite_images_rgbda(layers)
         return composite
 
+    def constrain_positions(self) -> None:
+        """Keep active means inside the cell used for compositing and ownership."""
+
+        cell = self.grid_active_cell
+        minimum = cell.bounding_box.min.to(cell.model.positions)
+        maximum = cell.bounding_box.max.to(cell.model.positions)
+        inclusive_maximum = torch.nextafter(maximum, minimum)
+        with torch.no_grad():
+            cell.model.positions.clamp_(min=minimum, max=inclusive_maximum)
+
     def __call__(
         self,
         camera: ViewWithRes,
         extra_cell_compensation: Union[CompensationType, None] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        return self.forward(camera, extra_cell_compensation)
+        return self.forward(camera, extra_cell_compensation=extra_cell_compensation)
 
     def to(self, device: str):
         self.grid_active_cell.model.to(device)

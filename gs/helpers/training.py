@@ -2,12 +2,16 @@ import numpy as np
 
 
 def get_expon_lr_func(
-    lr_init: float, lr_final: float, lr_delay_steps: int = 0, 
-    lr_delay_mult: float = 1.0, max_steps: int = 1000000
+    lr_init: float,
+    lr_final: float,
+    lr_delay_steps: int = 0,
+    lr_delay_mult: float = 1.0,
+    max_steps: int = 1000000,
 ) -> callable:
     """
     Returns a function that computes the learning rate based on an exponential decay.
     """
+
     def helper(step: int) -> float:
         if step < 0 or (lr_init == 0.0 and lr_final == 0.0):
             return 0.0

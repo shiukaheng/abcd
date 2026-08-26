@@ -6,12 +6,11 @@ from gs.core.View import KnownView
 
 @dataclass
 class BasicTrainConfig:
-
     # Iterations to train model for
-    iterations: int = 5000 
+    iterations: int = 5000
 
     # Whether to randomize image order during training
-    randomize: bool = True 
+    randomize: bool = True
 
     # Learning rate for positions (uses training schedule)
     positions_lr_init: float = 0.00016
@@ -61,7 +60,7 @@ class BasicTrainConfig:
     reset_to_opacity: float = 0.01
 
     # Maximum memory to use before stopping densification
-    max_memory: Union[int, None] = None 
+    max_memory: Union[int, None] = None
 
     # Maximum number of gaussians to use before stopping densification
     max_gaussians: Union[int, None] = None
@@ -70,21 +69,21 @@ class BasicTrainConfig:
     starting_iter: int = 0
     ending_iter: Union[int, None] = None
 
-    # Selected camera for debugging training process 
+    # Selected camera for debugging training process
     # (None for no preview, "all" for whatever is being trained, or specific camera)
     preview_camera: Union[KnownView, Literal["all"], None] = None
 
-    # Additional loss for transparency of rendered image, 
+    # Additional loss for transparency of rendered image,
     # encourages model to not rely on the black background
     transparency_loss_weight: float = 0.0
 
     # How many Gaussians to split a existing Gaussian into during densification
     split_n_samples: int = 2
 
-    # How much to shrink the Gaussians during densification, 
+    # How much to shrink the Gaussians during densification,
     # on top of the factor from the number of samples
     split_shrink_factor: float = 0.8
 
-    # Additional loss for Gaussians with opacities that are not 0 or 1. 
+    # Additional loss for Gaussians with opacities that are not 0 or 1.
     # Encourages Gaussians to be either fully opaque or fully transparent.
     opacity_uncertainty_penalty: float = 0.0

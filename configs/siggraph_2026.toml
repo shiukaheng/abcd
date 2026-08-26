@@ -1,0 +1,12 @@
+scenes = ["garden", "kitchen"]
+methods = ["3dgs", "abcd-no-compositing", "abcd"]
+
+[dataset]
+images_subdir = "images_4"
+holdout_every = 8
+
+[training]
+iterations = 5000
+partition_size = 5.0
+sync_interval = 250
+seed = 0

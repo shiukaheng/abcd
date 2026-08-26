@@ -1,19 +1,19 @@
 import math
+import threading
 import time
-from typing import Generic, List, Literal, NamedTuple, Tuple, TypeVar, Union
 import uuid
-import numpy as np
+from typing import Generic, List, Literal, NamedTuple, Tuple, TypeVar, Union
+
 import torch
 import viser
+
+from gs.compositing.gaussian_rendering_fix import fix_default_blended
 from gs.core.GaussianModel import GaussianModel
-import threading
 from gs.core.View import KnownView
 from gs.geometry.bounding_box import BoundingBox
 from gs.helpers.image import torch_to_numpy
-import threading
 from gs.helpers.transforms import rotmat_to_qvec
 from gs.trainers.grid.GridGaussianModel import GridGaussianCell
-from gs.compositing.gaussian_rendering_fix import fix_default_blended
 from gs.visualization.helpers import build_camera
 
 global shared_viser
@@ -37,8 +37,6 @@ def hsv_to_rgb(h, s, v):
     condition_two = i == 2
     condition_three = i == 3
     condition_four = i == 4
-    condition_five = i == 5
-
     r = torch.where(
         condition_zero,
         v,

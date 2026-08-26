@@ -1,38 +1,44 @@
+from __future__ import annotations
+
 from typing import List
 
 import torch
+
 from gs.core.GaussianModel import GaussianModel
 from gs.core.View import KnownView
 from gs.geometry.grid import Grid
 from gs.helpers.scene import estimate_scene_scale
 from gs.profiling import log_tensor_delete, log_tensor_set
+from gs.trainers.basic.train import train as basic_train
 from gs.trainers.grid.config import AutoGridConfig, GridTrainConfig
 from gs.trainers.grid.GridGaussianModel import GridGaussianModel
-from gs.trainers.basic.train import train as basic_train
-from gs.visualization.Viewer import Viewer
 
 
 def train(
-    model: GaussianModel, cameras: List[KnownView], c: GridTrainConfig, _viewer=None, aim_logger=None
+    model: GaussianModel,
+    cameras: List[KnownView],
+    c: GridTrainConfig,
+    _viewer=None,
+    aim_logger=None,
 ):
+    if c.sync_interval <= 0:
+        raise ValueError("sync_interval must be positive")
     try:
         model.assert_validity()
     except AssertionError as e:
         print("Model is invalid")
         raise e
 
-    if _viewer is None:
-        viewer = Viewer(auto_start=False)
-    else:
-        viewer = _viewer
-    viewer.set_model(model)
+    viewer = _viewer
+    if viewer is not None:
+        viewer.set_model(model)
 
     if c.scene_scale is None:
         scene_scale = estimate_scene_scale(cameras).item()
     else:
         scene_scale = c.scene_scale
 
-    # Split model into grid on its original device
+    # Split model into grid on its original device unless persisted shards exist.
     model.to(c.model_store_device)
 
     for name in [
@@ -64,6 +70,9 @@ def train(
         default_extra_cell_compensation=c.extra_cell_compensation,
         precomposite_enabled=c.precomposite_enabled,
         precomposite_storage=c.precomposite_storage,
+        cache_dir=c.cache_dir,
+        cache_fingerprint=c.cache_fingerprint,
+        resume=c.resume,
     )
 
     for name in [
@@ -76,23 +85,9 @@ def train(
     ]:
         log_tensor_delete(f"model.{name}", reason="split_into_cells")
 
-    for cell_idx, cell in enumerate(grid_model.grid_iter()):
-        prefix = f"cell_{cell.index}"
-        for name in [
-            "positions",
-            "sh_coefficients_0",
-            "sh_coefficients_rest",
-            "rotations",
-            "scales",
-            "opacities",
-        ]:
-            tensor = getattr(cell.model, name)
-            if isinstance(tensor, torch.Tensor):
-                log_tensor_set(f"{prefix}.{name}", tensor, role="parameter")
-
     # We train each cell in the grid for sync_interval iterations
     global_iteration = 0
-    while all(
+    while any(
         cell.current_iter < c.iterations for cell in grid_model.grid_iter()
     ):  # While there are cells that have not reached the target iteration
         cells = list(grid_model.grid_iter())
@@ -121,7 +116,9 @@ def train(
             c_cell.ending_iter = target_iteration
             c_cell.scene_scale = scene_scale
 
-            bounding_box_viz = viewer.add_cell_bounary(cell)
+            bounding_box_viz = (
+                viewer.add_cell_bounary(cell) if viewer is not None else None
+            )
 
             # Train the cell
             grid_model.grid_set_active_cell_index(cell.index)
@@ -130,23 +127,39 @@ def train(
             visible_cameras = grid_model.grid_get_visible_cameras_from_cell(
                 cell.index
             )  # Get the cameras that can see the cell
+            if len(visible_cameras) == 0:
+                print(f"  Skipping cell {cell.index}: no visible cameras")
+                cell.current_iter = c.iterations
+                if bounding_box_viz is not None:
+                    bounding_box_viz.remove()
+                continue
             iterations_this_round = target_iteration - cell.current_iter
             offset = global_iteration - cell.current_iter
-            active_cell_count = cell.model.positions.size(0)
+            active_cell_count = cell.gaussian_count
             if active_cell_count == 0:
                 print(f"  Skipping empty cell {cell.index}")
                 cell.current_iter = c.iterations
-                bounding_box_viz.remove()
+                if bounding_box_viz is not None:
+                    bounding_box_viz.remove()
                 continue
-            total_scene = sum(c.model.positions.size(0) for c in grid_model.grid_iter())
+            total_scene = sum(c.gaussian_count for c in grid_model.grid_iter())
             inactive_gaussians = total_scene - active_cell_count
-            basic_train(grid_model, visible_cameras, c_cell, viewer, offset,
-                        aim_logger=aim_logger, num_inactive_gaussians=inactive_gaussians,
-                        cell=str(cell.index))
+            basic_train(
+                grid_model,
+                visible_cameras,
+                c_cell,
+                viewer,
+                offset,
+                aim_logger=aim_logger,
+                num_inactive_gaussians=inactive_gaussians,
+                cell=str(cell.index),
+                training_state=cell.training_state,
+            )
             global_iteration += iterations_this_round
 
             cell.clean_model_edges()
-            bounding_box_viz.remove()
+            if bounding_box_viz is not None:
+                bounding_box_viz.remove()
 
             # Pre-render the cell if required
             if c.extra_cell_compensation != "disabled":
@@ -155,9 +168,6 @@ def train(
                     grid_model.grid_cull_active_cell_prerenders(target_iteration)
                 # print(f"Prerendering cell {cell.index} for {c.sync_interval} iterations")
                 grid_model.grid_prerender_active_cell(target_iteration)
-
-            # Update the cell to notifiy that it has been trained
-            cell.current_iter = target_iteration
 
             # # Ask user to continue
             # input("Press Enter to continue...")

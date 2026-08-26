@@ -1,15 +1,19 @@
+from __future__ import annotations
+
 import os
 import random
-import time
 import warnings
-from typing import List, Union
+from typing import TYPE_CHECKING, List, Union
+
+import cv2
 import torch
 from tqdm import tqdm
-from gs.core.View import KnownView
+
 from gs.core.GaussianModel import GaussianModel
+from gs.core.View import KnownView
 from gs.helpers.formatting import format_number
-from gs.helpers.image import torch_to_cv2, torch_to_numpy, torch_to_pil
-from gs.helpers.loss import mix_l1_ssim_loss, l2_loss
+from gs.helpers.image import torch_to_cv2
+from gs.helpers.loss import l2_loss
 from gs.helpers.scene import estimate_scene_scale
 from gs.helpers.training import get_expon_lr_func
 from gs.profiling import log_iteration, log_tensor_set
@@ -20,9 +24,10 @@ from gs.trainers.basic.dynamic_parameters import (
     prune_opacity_only,
     reset_opacities,
 )
-from gs.visualization.Viewer import Viewer
+from gs.trainers.basic.state import BasicTrainState
 
-import cv2
+if TYPE_CHECKING:
+    from gs.visualization.Viewer import Viewer
 
 
 # Check if display is available for OpenCV preview
@@ -45,6 +50,7 @@ def train(
     aim_logger=None,
     num_inactive_gaussians: int = 0,
     cell=None,
+    training_state: BasicTrainState | None = None,
 ):
     """
     This is the most basic trainer for Gaussian splatting. It mirrors the original training logic.
@@ -68,12 +74,9 @@ def train(
         if isinstance(tensor, torch.Tensor):
             log_tensor_set(f"model.{name}", tensor, role="parameter")
 
-    # Prepare model visualizer
-    if _viewer is None:
-        viewer = Viewer(auto_start=False)
-    else:
-        viewer = _viewer
-    viewer.set_model(model)
+    viewer = _viewer
+    if viewer is not None:
+        viewer.set_model(model)
 
     # We estimate the scene size, such that a larger scene will have a larger learning rate. It is a heuristic defined in the original code.
     if c.scene_scale is None:
@@ -106,6 +109,15 @@ def train(
     # With all this set, we can define the optimizer.
     optimizer = torch.optim.Adam(lr_groups, lr=0.0, eps=1e-15)
 
+    if training_state is None:
+        training_state = BasicTrainState(next_iteration=c.starting_iter)
+    elif training_state.next_iteration != c.starting_iter:
+        raise ValueError(
+            f"Training state expects iteration {training_state.next_iteration}, "
+            f"but config starts at {c.starting_iter}"
+        )
+    training_state.restore_optimizer(optimizer)
+
     # We define the learning rate scheduler for the positions parameters, such that initially it is high and decays exponentially.
     position_lr_scheduler = get_expon_lr_func(
         lr_init=c.positions_lr_init * scene_scale,
@@ -118,11 +130,15 @@ def train(
     train_cameras: List[KnownView] = []
 
     # We set the active SH degree to 0. For this basic trainer, each Gaussian will just have a constant color.
-    active_sh_degree = 0
+    if training_state.active_sh_degree is None:
+        completed_boundaries = max(c.starting_iter - 1, 0) // c.up_sh_interval
+        active_sh_degree = min(model.sh_degree, completed_boundaries)
+    else:
+        active_sh_degree = training_state.active_sh_degree
 
     # RAM backup in case of out of CUDA memory
-    max_memory_reached = False
-    max_gaussians_reached = False
+    max_memory_reached = training_state.densification_stopped_for_memory
+    max_gaussians_reached = training_state.densification_stopped_for_count
 
     # Create range of iterations, modifiable by starting_iter and ending_iter
     pbar = tqdm(
@@ -230,44 +246,53 @@ def train(
 
             # We perform the optimization step and zero the gradients
             optimizer.step()
+            model.constrain_positions()
             optimizer.zero_grad(
                 set_to_none=True
             )  # We zero the gradients so they do not accumulate to the next iteration.
+            training_state.next_iteration = i + 1
+            training_state.active_sh_degree = active_sh_degree
 
             n = model.positions.size(0)
-            log_iteration(i + global_iteration_offset,
-                          gaussians_loaded=n,
-                          gaussians_total=n + num_inactive_gaussians,
-                          loss=loss.item(),
-                          cell=cell,
-                          cell_iteration=i)
+            log_iteration(
+                i + global_iteration_offset,
+                gaussians_loaded=n,
+                gaussians_total=n + num_inactive_gaussians,
+                loss=loss.item(),
+                cell=cell,
+                cell_iteration=i,
+            )
 
             if aim_logger is not None:
-                aim_logger.track(i + global_iteration_offset,
-                                 gaussians_loaded=n,
-                                 gaussians_total=n + num_inactive_gaussians)
+                aim_logger.track(
+                    i + global_iteration_offset,
+                    gaussians_loaded=n,
+                    gaussians_total=n + num_inactive_gaussians,
+                )
 
-            viewer.render_once()
+            if viewer is not None:
+                viewer.render_once()
 
             pbar.set_description(
                 f"Loss: {loss.item()}, Num splats: {format_number(model.positions.size(0))}"
             )
-            torch.cuda.empty_cache()  # We empty the cache to avoid memory leaks.
-
             # Check if we have reached the memory limit or the maximum number of Gaussians
             if (
                 c.max_memory is not None
                 and torch.cuda.memory_allocated() > c.max_memory
             ):
                 max_memory_reached = True
+                training_state.densification_stopped_for_memory = True
                 print("Out of memory")
             if (
                 c.max_gaussians is not None
                 and model.positions.size(0) > c.max_gaussians
             ):
                 max_gaussians_reached = True
+                training_state.densification_stopped_for_count = True
                 print("Max Gaussians reached")
 
+    training_state.capture_optimizer(optimizer)
     return model
 
 

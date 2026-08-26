@@ -1,6 +1,8 @@
 from dataclasses import dataclass, field
 from typing import Literal, Union
+
 import torch
+
 from gs.core.GaussianModel import GaussianModel
 from gs.geometry.grid import Grid
 from gs.trainers.basic.config import BasicTrainConfig
@@ -30,3 +32,6 @@ class GridTrainConfig(BasicTrainConfig):
     min_gaussians: int = 50
     precomposite_enabled: bool = True
     precomposite_storage: Literal["gpu", "cpu"] = "gpu"
+    cache_dir: str | None = None
+    cache_fingerprint: str = "abcd-v1"
+    resume: bool = False

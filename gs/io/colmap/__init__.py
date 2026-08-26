@@ -1,13 +1,14 @@
 import os
-from typing import List, Tuple
+import struct
 import warnings
+from typing import List, Tuple
+
 import numpy as np
+from PIL import Image
 from tqdm import tqdm
-from gs.io.colmap.COLMAPView import COLMAPView
+
 from gs.helpers.image import pil_to_torch
-from gs.profiling import log_tensor_set
 from gs.helpers.transforms import qvec_to_rotmat
-from gs.io.colmap.COLMAPPointCloud import COLMAPPointCloud
 from gs.io.colmap.camera_parsing import (
     get_fov,
     read_extrinsics_binary,
@@ -15,14 +16,15 @@ from gs.io.colmap.camera_parsing import (
     read_intrinsics_binary,
     read_intrinsics_text,
 )
-from PIL import Image
-
+from gs.io.colmap.COLMAPPointCloud import COLMAPPointCloud
+from gs.io.colmap.COLMAPView import COLMAPView
 from gs.io.colmap.sparse_parsing import (
     fetchPly,
     read_points3D_binary,
     read_points3D_text,
     storePly,
 )
+from gs.profiling import log_tensor_set
 
 """
 This module contains the main functions for loading COLMAP models.
@@ -51,16 +53,26 @@ def load(
 
 
 def load_cameras(path: str, images_subdir: str = "images") -> List[COLMAPView]:
-    try:
-        cameras_extrinsic_file = os.path.join(path, "sparse/0", "images.bin")
-        cameras_intrinsic_file = os.path.join(path, "sparse/0", "cameras.bin")
-        camera_extrinsics = read_extrinsics_binary(cameras_extrinsic_file)
-        camera_intrinsics = read_intrinsics_binary(cameras_intrinsic_file)
-    except Exception as e:
-        cameras_extrinsic_file = os.path.join(path, "sparse/0", "images.txt")
-        cameras_intrinsic_file = os.path.join(path, "sparse/0", "cameras.txt")
-        camera_extrinsics = read_extrinsics_text(cameras_extrinsic_file)
-        camera_intrinsics = read_intrinsics_text(cameras_intrinsic_file)
+    binary_extrinsics = os.path.join(path, "sparse/0", "images.bin")
+    binary_intrinsics = os.path.join(path, "sparse/0", "cameras.bin")
+    text_extrinsics = os.path.join(path, "sparse/0", "images.txt")
+    text_intrinsics = os.path.join(path, "sparse/0", "cameras.txt")
+    if os.path.exists(binary_extrinsics) and os.path.exists(binary_intrinsics):
+        try:
+            camera_extrinsics = read_extrinsics_binary(binary_extrinsics)
+            camera_intrinsics = read_intrinsics_binary(binary_intrinsics)
+        except (OSError, ValueError, struct.error) as error:
+            raise ValueError(f"Failed to read binary COLMAP model at {path}") from error
+    elif os.path.exists(text_extrinsics) and os.path.exists(text_intrinsics):
+        try:
+            camera_extrinsics = read_extrinsics_text(text_extrinsics)
+            camera_intrinsics = read_intrinsics_text(text_intrinsics)
+        except (OSError, ValueError) as error:
+            raise ValueError(f"Failed to read text COLMAP model at {path}") from error
+    else:
+        raise FileNotFoundError(
+            f"No complete COLMAP camera model found under {path}/sparse/0"
+        )
 
     # Now, we use the intermediate format to create Camera objects
     images_folder = os.path.join(path, images_subdir)
@@ -85,10 +97,11 @@ def load_cameras(path: str, images_subdir: str = "images") -> List[COLMAPView]:
         # If lowercase path doesn't exist, try the original (handles .JPG files)
         if not os.path.exists(image_path):
             image_path = image_path_original
-        with warnings.catch_warnings():  # Suppress EXIF warnings .. "Corrupt EXIF data"
+        with warnings.catch_warnings(), Image.open(image_path) as pil_image:
             warnings.simplefilter("ignore")
-            pil_image = Image.open(image_path)
-        image = pil_to_torch(pil_image)
+            image = pil_to_torch(pil_image)
+            image_height = pil_image.height
+            image_width = pil_image.width
         log_tensor_set(f"cam_{idx}.image", image, role="buffer")
 
         # Point indexes = indexes of extrinsics.points3D_ids that are not -1
@@ -100,8 +113,8 @@ def load_cameras(path: str, images_subdir: str = "images") -> List[COLMAPView]:
             t,
             fov_x,
             fov_y,
-            pil_image.height,
-            pil_image.width,
+            image_height,
+            image_width,
             idx,
             image,
             image_path,
@@ -118,14 +131,17 @@ def load_sparse_points(path: str) -> COLMAPPointCloud:
     bin_path = os.path.join(path, "sparse/0/points3D.bin")
     txt_path = os.path.join(path, "sparse/0/points3D.txt")
     if not os.path.exists(ply_path):
-        # No .ply file. We will convert the .bin or .txt file to .ply
-        try:
-            xyz, rgb, errors, point3d_ids = read_points3D_binary(bin_path)
-        except:
-            xyz, rgb, errors, point3d_ids = read_points3D_text(txt_path)
+        if os.path.exists(bin_path):
+            xyz, rgb, _, point3d_ids = read_points3D_binary(bin_path)
+        elif os.path.exists(txt_path):
+            xyz, rgb, _, point3d_ids = read_points3D_text(txt_path)
+        else:
+            raise FileNotFoundError(
+                f"No COLMAP sparse points found at {bin_path} or {txt_path}"
+            )
         storePly(ply_path, xyz, rgb, point3d_ids)
     try:
         pcd = fetchPly(ply_path)
-    except:
-        pcd = None
+    except Exception as error:
+        raise ValueError(f"Failed to read COLMAP point cloud {ply_path}") from error
     return pcd
