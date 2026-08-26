@@ -18,6 +18,12 @@ import os
 import matplotlib.pyplot as plt
 import tyro
 
+LEGEND_NAMES = {
+    "grid_smallb": "ABCD",
+    "grid_smallb_no_comp": "ABCD (compositing ablated)",
+    "vanilla": "3DGS",
+}
+
 
 def load_experiment(jsonl_path: str):
     iters = []
@@ -98,49 +104,54 @@ def main(
         print(f"  {len(data['iterations'])} iteration records")
 
     colors = plt.cm.tab10(range(len(exps)))
+    figsize = (4.5, 3.0)
 
-    fig, (ax_loss, ax_gauss) = plt.subplots(1, 2, figsize=(16, 6))
-
+    # Loss plot
+    fig, ax = plt.subplots(figsize=figsize)
     for (name, data), color in zip(exps, colors):
+        label = LEGEND_NAMES.get(name, name)
         iters = data["iterations"]
         progress = _normalize(iters)
-        gaussians = data["gaussians"]
         losses = data["losses"]
         cells = data["cells"]
         has_switch = _has_switches(cells)
-
-        # Loss plot (log scale)
         if any(v is not None for v in losses):
             if smooth_alpha > 0 and has_switch:
                 siters, sloss = _smooth_per_segment(iters, losses, cells, smooth_alpha)
                 sprog = _normalize(siters)
-                ax_loss.plot(progress, losses, alpha=0.1, linewidth=0.4, color=color)
-                ax_loss.plot(sprog, sloss, alpha=0.9, linewidth=1.2, color=color, label=name)
+                ax.plot(progress, losses, alpha=0.1, linewidth=0.4, color=color)
+                ax.plot(sprog, sloss, alpha=0.9, linewidth=1.2, color=color, label=label)
             elif smooth_alpha > 0:
                 sloss = _ema_smooth(losses, smooth_alpha)
-                ax_loss.plot(progress, losses, alpha=0.1, linewidth=0.4, color=color)
-                ax_loss.plot(progress, sloss, alpha=0.9, linewidth=1.2, color=color, label=name)
+                ax.plot(progress, losses, alpha=0.1, linewidth=0.4, color=color)
+                ax.plot(progress, sloss, alpha=0.9, linewidth=1.2, color=color, label=label)
             else:
-                ax_loss.plot(progress, losses, alpha=0.8, linewidth=0.8, color=color, label=name)
-
-        # Gaussians plot
-        if any(v is not None for v in gaussians):
-            ax_gauss.plot(progress, gaussians, alpha=0.8, linewidth=0.8, color=color, label=name)
-
-    ax_loss.set_xlabel("Training progress")
-    ax_loss.set_ylabel("Loss")
-    ax_loss.set_yscale("log")
-    ax_loss.legend(fontsize=8)
-    ax_loss.set_title("Loss comparison")
-
-    ax_gauss.set_xlabel("Training progress")
-    ax_gauss.set_ylabel("Gaussians loaded")
-    ax_gauss.legend(fontsize=8)
-    ax_gauss.set_title("Gaussians comparison")
-
+                ax.plot(progress, losses, alpha=0.8, linewidth=0.8, color=color, label=label)
+    ax.set_xlabel("Training progress")
+    ax.set_ylabel("Loss")
+    ax.set_yscale("log")
+    ax.legend(fontsize=6)
     plt.tight_layout()
-    out = os.path.join(output_dir, "comparison.png")
-    fig.savefig(out, dpi=150, bbox_inches="tight")
+    out = os.path.join(output_dir, "loss_comparison.png")
+    fig.savefig(out, dpi=200, bbox_inches="tight")
+    plt.close()
+    print(f"Saved: {out}")
+
+    # Gaussians plot
+    fig, ax = plt.subplots(figsize=figsize)
+    for (name, data), color in zip(exps, colors):
+        label = LEGEND_NAMES.get(name, name)
+        iters = data["iterations"]
+        progress = _normalize(iters)
+        gaussians = data["gaussians"]
+        if any(v is not None for v in gaussians):
+            ax.plot(progress, gaussians, alpha=0.8, linewidth=0.8, color=color, label=label)
+    ax.set_xlabel("Training progress")
+    ax.set_ylabel("Gaussians loaded")
+    ax.legend(fontsize=6)
+    plt.tight_layout()
+    out = os.path.join(output_dir, "gaussians_comparison.png")
+    fig.savefig(out, dpi=200, bbox_inches="tight")
     plt.close()
     print(f"Saved: {out}")
 
