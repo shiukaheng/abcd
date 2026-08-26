@@ -1,8 +1,8 @@
 import torch
 from conftest import make_gaussian_model
 
-from gs.geometry.grid import Grid, GridIndex
-from gs.trainers.grid.GridGaussianModel import GridGaussianModel
+from abcd.geometry.grid import Grid, GridIndex
+from abcd.trainers.grid.GridGaussianModel import GridGaussianModel
 
 
 def test_active_positions_are_projected_into_half_open_cell(tmp_path):

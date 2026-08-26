@@ -2,7 +2,7 @@ import pytest
 import torch
 from conftest import make_gaussian_model
 
-from gs.core.GaussianModel import GaussianModel
+from abcd.core.GaussianModel import GaussianModel
 
 
 @pytest.mark.parametrize("degree", [0, 1, 3])

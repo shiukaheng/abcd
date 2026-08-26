@@ -4,9 +4,9 @@ import pytest
 import torch
 from conftest import make_gaussian_model
 
-from gs.geometry.bounding_box import BoundingBox
-from gs.geometry.grid import Grid, GridIndex
-from gs.trainers.grid.grid_utils import cut, merge_model, split_model
+from abcd.geometry.bounding_box import BoundingBox
+from abcd.geometry.grid import Grid, GridIndex
+from abcd.trainers.grid.grid_utils import cut, merge_model, split_model
 
 
 def test_point_to_cell_uses_floor_for_negative_coordinates():

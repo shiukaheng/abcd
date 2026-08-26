@@ -1,6 +1,6 @@
 import pytest
 
-from gs.io.split import split_train_test_cameras
+from abcd.io.split import split_train_test_cameras
 
 
 def test_camera_split_is_deterministic_and_disjoint():

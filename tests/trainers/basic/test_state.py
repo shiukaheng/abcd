@@ -1,6 +1,6 @@
 import torch
 
-from gs.trainers.basic.state import BasicTrainState
+from abcd.trainers.basic.state import BasicTrainState
 
 
 def make_optimizer(parameter):

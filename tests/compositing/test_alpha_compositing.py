@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from gs.compositing.alpha_compositing import composite_images_rgbda
+from abcd.compositing.alpha_compositing import composite_images_rgbda
 
 
 def layer(color, alpha, depth=1.0):

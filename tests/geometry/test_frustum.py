@@ -1,8 +1,8 @@
 import torch
 
-from gs.geometry.bounding_box import BoundingBox
-from gs.geometry.frustum import Frustum
-from gs.geometry.plane import Plane
+from abcd.geometry.bounding_box import BoundingBox
+from abcd.geometry.frustum import Frustum
+from abcd.geometry.plane import Plane
 
 
 def box(minimum, maximum):

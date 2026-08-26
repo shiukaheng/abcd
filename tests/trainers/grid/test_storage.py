@@ -4,9 +4,9 @@ import pytest
 import torch
 from conftest import make_gaussian_model
 
-from gs.geometry.grid import GridIndex
-from gs.trainers.basic.state import BasicTrainState
-from gs.trainers.grid.storage import (
+from abcd.geometry.grid import GridIndex
+from abcd.trainers.basic.state import BasicTrainState
+from abcd.trainers.grid.storage import (
     CachedRender,
     DirectoryRenderCache,
     DirectoryShardStore,

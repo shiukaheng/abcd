@@ -1,6 +1,6 @@
 import torch
 
-from gs.core.GaussianModel import GaussianModel
+from abcd.core.GaussianModel import GaussianModel
 
 
 def make_gaussian_model(positions: torch.Tensor, sh_degree: int = 0) -> GaussianModel:

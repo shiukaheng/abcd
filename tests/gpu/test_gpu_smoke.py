@@ -4,10 +4,10 @@ import numpy as np
 import pytest
 import torch
 
-from gs.core.GaussianModel import GaussianModel
-from gs.core.View import ViewWithRes
-from gs.geometry.grid import Grid, GridIndex
-from gs.trainers.grid.GridGaussianModel import GridGaussianModel
+from abcd.core.GaussianModel import GaussianModel
+from abcd.core.View import ViewWithRes
+from abcd.geometry.grid import Grid, GridIndex
+from abcd.trainers.grid.GridGaussianModel import GridGaussianModel
 
 pytestmark = pytest.mark.gpu
 

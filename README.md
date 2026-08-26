@@ -89,13 +89,19 @@ Run the paper configuration for all methods and scenes:
 ```bash
 uv run abcd-reproduce \
   --dataset-root datasets \
-  --output results/siggraph_2026 \
-  --config configs/siggraph_2026.toml
+  --output results/siggraph_2026
 ```
 
 The command reuses completed models and evaluations unless `--force` is given.
 It produces `results.json`, `results.csv`, and `comparison.png` in the output
-directory. Run `abcd-summarize` or `abcd-plot --help` for the individual steps.
+directory. The function defaults are visible in `src/abcd/reproduce.py`; pass
+arguments such as `--iterations 10000` to override them.
+
+Equivalent runnable entrypoints live in `scripts/`, for example:
+
+```bash
+uv run python scripts/reproduce.py --dataset-root datasets --output results/paper
+```
 
 ## Memory Model
 
@@ -125,8 +131,8 @@ fails when peak allocated VRAM spreads by 1 MiB or more.
 
 ```bash
 uv sync --frozen --group dev
-uv run ruff format --check abcd gs tests build_submodule.py
-uv run ruff check abcd gs tests build_submodule.py
+uv run ruff format --check src tests scripts build_submodule.py
+uv run ruff check src tests scripts build_submodule.py
 uv run pyright
 uv run pytest
 ```

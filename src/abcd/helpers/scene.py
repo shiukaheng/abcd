@@ -1,0 +1,17 @@
+from typing import List
+
+import torch
+
+from abcd.core.View import View
+
+
+def estimate_scene_scale(cameras: List[View], inflation_factor: float = 1.1):
+    """
+    Calculate the scene radius based on the camera positions. Metric will be used to scale the learning rate.
+    Larger scene sizes lead to larger step sizes in optimization.
+    """
+    positions = [camera.center for camera in cameras]
+    positions = torch.vstack(positions)  # (N, 3)
+    center = torch.mean(positions, dim=0)  # (3,)
+    distances_to_center = torch.norm(positions - center, dim=1)  # (N,)
+    return torch.max(distances_to_center) * inflation_factor

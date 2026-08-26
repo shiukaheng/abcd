@@ -1,6 +1,6 @@
 import numpy as np
 
-from gs.io.colmap.sparse_parsing import read_points3D_text
+from abcd.io.colmap.sparse_parsing import read_points3D_text
 
 
 def test_read_points3d_text_returns_ids_and_values(tmp_path):

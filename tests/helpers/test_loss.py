@@ -1,6 +1,6 @@
 import torch
 
-import gs.helpers.loss as losses
+import abcd.helpers.loss as losses
 
 
 class FakeLpips:

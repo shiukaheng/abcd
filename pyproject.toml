@@ -37,8 +37,11 @@ requires = ["setuptools>=70"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["abcd*", "gs*"]
-namespaces = true
+where = ["src"]
+include = ["abcd*"]
+
+[tool.setuptools.package-dir]
+"" = "src"
 
 [tool.uv]
 # Build submodules without isolation so torch is available during build
@@ -54,7 +57,7 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["."]
+pythonpath = ["src"]
 markers = [
     "gpu: requires a CUDA-capable GPU and the CUDA rasterizer",
 ]
@@ -68,10 +71,16 @@ select = ["E4", "E7", "E9", "F", "I"]
 
 [tool.pyright]
 include = [
-    "abcd",
-    "gs/io/split.py",
-    "gs/trainers/basic/state.py",
-    "gs/trainers/grid/storage.py",
+    "src/abcd/train.py",
+    "src/abcd/evaluate.py",
+    "src/abcd/reproduce.py",
+    "src/abcd/summarize.py",
+    "src/abcd/plot.py",
+    "src/abcd/memory.py",
+    "src/abcd/io/split.py",
+    "src/abcd/trainers/basic/state.py",
+    "src/abcd/trainers/grid/storage.py",
+    "scripts",
 ]
 typeCheckingMode = "basic"
 
