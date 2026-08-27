@@ -188,6 +188,32 @@ class DirectoryRenderCache:
             old_directory.rmdir()
 
 
+class MemoryRenderCache:
+    """Host-RAM cache for fast partition switching on large-memory machines."""
+
+    def __init__(self):
+        self.renders: dict[tuple[GridIndex, str, int], CachedRender] = {}
+
+    def store(self, cell_id, camera_id, iteration, render: CachedRender) -> None:
+        render.validate()
+        self.renders[(cell_id, str(camera_id), iteration)] = CachedRender(
+            render.rgb.detach().cpu().clone(),
+            render.depth.detach().cpu().clone(),
+            render.alpha.detach().cpu().clone(),
+        )
+
+    def load(self, cell_id, camera_id, iteration) -> CachedRender:
+        return self.renders[(cell_id, str(camera_id), iteration)]
+
+    def iterations(self, cell_id: GridIndex) -> list[int]:
+        return sorted({key[2] for key in self.renders if key[0] == cell_id})
+
+    def remove_older_than(self, cell_id: GridIndex, iteration: int) -> None:
+        for key in list(self.renders):
+            if key[0] == cell_id and key[2] < iteration:
+                del self.renders[key]
+
+
 @dataclass
 class ShardState:
     model: GaussianModel
@@ -302,3 +328,17 @@ class DirectoryShardStore:
         training_payload = payload["training"]
         training = BasicTrainState(**training_payload)
         return ShardState(model=model, training=training)
+
+
+class MemoryShardStore:
+    """Host-RAM storage for inactive partition models and optimizer state."""
+
+    def __init__(self):
+        self.states: dict[GridIndex, ShardState] = {}
+
+    def store(self, cell_id: GridIndex, state: ShardState) -> None:
+        state.model.to("cpu")
+        self.states[cell_id] = state
+
+    def load(self, cell_id: GridIndex) -> ShardState:
+        return self.states[cell_id]

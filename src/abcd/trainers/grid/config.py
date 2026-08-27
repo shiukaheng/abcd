@@ -32,6 +32,7 @@ class GridTrainConfig(BasicTrainConfig):
     min_gaussians: int = 50
     precomposite_enabled: bool = True
     precomposite_storage: Literal["gpu", "cpu"] = "gpu"
+    cache_storage: Literal["disk", "ram"] = "disk"
     cache_dir: str | None = None
     cache_fingerprint: str = "abcd-v1"
     resume: bool = False

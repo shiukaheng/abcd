@@ -73,6 +73,7 @@ def train(
         cache_dir=c.cache_dir,
         cache_fingerprint=c.cache_fingerprint,
         resume=c.resume,
+        cache_storage=c.cache_storage,
     )
 
     for name in [

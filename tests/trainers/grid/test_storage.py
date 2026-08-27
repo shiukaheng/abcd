@@ -10,6 +10,8 @@ from abcd.trainers.grid.storage import (
     CachedRender,
     DirectoryRenderCache,
     DirectoryShardStore,
+    MemoryRenderCache,
+    MemoryShardStore,
     ShardState,
 )
 
@@ -38,6 +40,23 @@ def test_render_cache_round_trip_and_culling(tmp_path):
     assert cache.iterations(cell) == [20]
     with pytest.raises(KeyError):
         cache.load(cell, "camera/1", 10)
+
+
+def test_memory_cache_and_shard_store_round_trip():
+    render_cache = MemoryRenderCache()
+    cell = GridIndex(1, -2, 3)
+    render_cache.store(cell, "camera/1", 10, cached_render())
+    torch.testing.assert_close(
+        render_cache.load(cell, "camera/1", 10).rgb, cached_render().rgb
+    )
+
+    state = ShardState(
+        make_gaussian_model(torch.tensor([[0.0, 1.0, 2.0]]), sh_degree=1),
+        BasicTrainState(next_iteration=17),
+    )
+    shard_store = MemoryShardStore()
+    shard_store.store(cell, state)
+    assert shard_store.load(cell) is state
 
 
 def test_render_cache_rejects_wrong_fingerprint_and_corruption(tmp_path):

@@ -16,6 +16,8 @@ from abcd.trainers.grid.storage import (
     CachedRender,
     DirectoryRenderCache,
     DirectoryShardStore,
+    MemoryRenderCache,
+    MemoryShardStore,
     ShardState,
 )
 
@@ -169,12 +171,20 @@ class GridGaussianModel(Generic[T]):
         cache_dir: str | None = None,
         cache_fingerprint: str = "abcd-v1",
         resume: bool = False,
+        cache_storage: Literal["disk", "ram"] = "disk",
     ):
-        if cache_dir is None:
-            cache_dir = tempfile.mkdtemp(prefix="abcd-cache-")
-        self.grid_cache_dir = cache_dir
-        self.render_cache = DirectoryRenderCache(cache_dir, cache_fingerprint)
-        self.shard_store = DirectoryShardStore(cache_dir, cache_fingerprint)
+        if cache_storage == "ram":
+            if resume:
+                raise ValueError("RAM cache cannot resume a previous process")
+            self.grid_cache_dir = None
+            self.render_cache = MemoryRenderCache()
+            self.shard_store = MemoryShardStore()
+        else:
+            if cache_dir is None:
+                cache_dir = tempfile.mkdtemp(prefix="abcd-cache-")
+            self.grid_cache_dir = cache_dir
+            self.render_cache = DirectoryRenderCache(cache_dir, cache_fingerprint)
+            self.shard_store = DirectoryShardStore(cache_dir, cache_fingerprint)
         if resume:
             descriptions = self.shard_store.descriptions()
             if not descriptions:
@@ -252,6 +262,7 @@ class GridGaussianModel(Generic[T]):
         cache_dir: str | None = None,
         cache_fingerprint: str = "abcd-v1",
         resume: bool = False,
+        cache_storage: Literal["disk", "ram"] = "disk",
     ):
         cells = (
             {}
@@ -277,6 +288,7 @@ class GridGaussianModel(Generic[T]):
             cache_dir,
             cache_fingerprint,
             resume,
+            cache_storage,
         )
 
     def grid_get(self, index: GridIndex) -> GaussianModel:

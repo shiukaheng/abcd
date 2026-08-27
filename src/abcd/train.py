@@ -82,6 +82,7 @@ def train(
     opacity_threshold: float = 0.005,
     split_n_samples: int = 2,
     split_shrink_factor: float = 0.8,
+    cache_storage: Literal["disk", "ram"] = "disk",
     resume: bool = False,
     headless: bool = False,
     preview: str | None = None,
@@ -134,14 +135,17 @@ def train(
         "opacity_threshold": opacity_threshold,
         "split_n_samples": split_n_samples,
         "split_shrink_factor": split_shrink_factor,
+        "cache_storage": cache_storage,
     }
     cache_fingerprint = hashlib.sha256(
         json.dumps(run_config, sort_keys=True).encode("utf-8")
     ).hexdigest()
     cache_dir = output / "cache"
+    if cache_storage == "ram" and resume:
+        raise ValueError("--resume requires --cache-storage disk")
     resume = (
         _prepare_cache(cache_dir, cache_fingerprint, resume)
-        if method != "3dgs"
+        if method != "3dgs" and cache_storage == "disk"
         else False
     )
     manifest = {
@@ -191,6 +195,7 @@ def train(
                     ),
                     precomposite_enabled=composition_enabled,
                     precomposite_storage="cpu",
+                    cache_storage=cache_storage,
                     cache_dir=str(cache_dir),
                     cache_fingerprint=cache_fingerprint,
                     resume=resume,

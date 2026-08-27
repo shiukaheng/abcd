@@ -109,6 +109,20 @@ Interrupted ABCD runs resume from the shard and optimizer checkpoints when
 restarted with `--resume` and the same configuration. Every run otherwise
 discards the existing cache in its output directory before starting fresh.
 
+`--cache-storage disk` is the default: it bounds RAM use and supports explicit
+resume. On a machine with enough RAM, `--cache-storage ram` keeps inactive
+partition models and cached renders in host memory for faster block switches.
+RAM cache is cleared when the process exits and cannot resume.
+
+## Block Switching
+
+ABCD switches to another spatial block every `--sync-interval` updates. With
+`--cache-storage disk`, a switch reads the next block's model and cached renders
+from disk, so frequent switching can become I/O-bound. Increase
+`--sync-interval` to switch less often, or use `--cache-storage ram` when the
+machine has enough host memory to keep all blocks and cached renders resident.
+RAM mode is faster but is not resumable and scales with total scene size.
+
 ## Interactive Viewer
 
 Training starts a Viser server at <http://localhost:8080> by default. Open it

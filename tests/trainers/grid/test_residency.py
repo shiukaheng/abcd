@@ -61,3 +61,24 @@ def test_resume_rebuilds_grid_without_materializing_shards(tmp_path):
     assert resumed.grid_cells[GridIndex(0, 0, 0)].current_iter == 5
     resumed.grid_set_active_cell_index(GridIndex(0, 0, 0))
     assert resumed.grid_active_cell.model is not None
+
+
+def test_ram_cache_switches_shards_without_creating_disk_state(tmp_path):
+    model = make_gaussian_model(torch.tensor([[0.25, 0.0, 0.0], [1.25, 0.0, 0.0]]))
+    cache_dir = tmp_path / "cache"
+    grid_model = GridGaussianModel.from_gaussian_model(
+        model,
+        cameras=[],
+        grid=Grid(grid_size=1.0),
+        model_store_device="cpu",
+        model_train_device="cpu",
+        min_gaussians=0,
+        cache_dir=str(cache_dir),
+        cache_storage="ram",
+    )
+
+    grid_model.grid_set_active_cell_index(GridIndex(0, 0, 0))
+    grid_model.grid_set_active_cell_index(GridIndex(1, 0, 0))
+
+    assert grid_model.grid_cache_dir is None
+    assert not cache_dir.exists()
