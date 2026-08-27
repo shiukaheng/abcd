@@ -148,9 +148,22 @@ uv run pytest
 ## License
 
 Original ABCD code is released under the MIT License. Bundled GraphDECO
-rasterizer and simple-knn code have separate non-commercial research and
-evaluation terms. See `LICENSE`, `THIRD_PARTY_NOTICES.md`, and the licenses in
-`submodules/`.
+rasterizer and simple-knn code have separate research and evaluation terms.
+
+`submodules/diff-gaussian-rasterization/` is derived from the Gaussian
+Splatting software by Inria and MPII, with modifications based on Ashawkey's
+rasterizer. Its license at
+`submodules/diff-gaussian-rasterization/LICENSE.md` permits research and
+evaluation use and prohibits commercial use without prior permission.
+
+`submodules/simple-knn/` is derived from the GraphDECO Gaussian Splatting
+implementation by Inria and MPII. Its headers identify the same
+Gaussian-Splatting license, so this distribution treats it as research and
+evaluation only as well.
+
+Upstream projects: [GraphDECO Gaussian
+Splatting](https://github.com/graphdeco-inria/gaussian-splatting) and
+[Ashawkey rasterizer](https://github.com/ashawkey/diff-gaussian-rasterization).
 
 ## Citation
 
