@@ -303,14 +303,14 @@ class Viewer(Generic[T]):
         Add camera to the viewer
         """
         name = f"/cameras/{camera.id}/frustum"
-        return self.viser.add_camera_frustum(
-            name,
-            camera.fov_y,
-            camera.aspect_ratio,
-            camera_scale,
-            color,
-            torch_to_numpy(camera.image) if show_image else None,
-            "jpeg",
+        return self.viser.scene.add_camera_frustum(
+            name=name,
+            fov=camera.fov_y,
+            aspect=camera.aspect_ratio,
+            scale=camera_scale,
+            color=color,
+            image=torch_to_numpy(camera.image) if show_image else None,
+            format="jpeg",
             jpeg_quality=None,
             wxyz=rotmat_to_qvec(camera.R),
             position=camera.center,

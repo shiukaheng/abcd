@@ -3,6 +3,7 @@ import hashlib
 import json
 import os
 import random
+import shutil
 import subprocess
 from pathlib import Path
 from typing import Literal, cast
@@ -21,6 +22,7 @@ from abcd.trainers.basic.config import BasicTrainConfig
 from abcd.trainers.basic.train import train as basic_train
 from abcd.trainers.grid.config import GridTrainConfig
 from abcd.trainers.grid.train import train as grid_train
+from abcd.visualization.Viewer import Viewer
 
 Method = Literal["3dgs", "abcd", "abcd-no-compositing"]
 
@@ -45,6 +47,24 @@ def _set_seed(seed: int) -> None:
         torch.cuda.manual_seed_all(seed)
 
 
+def _prepare_cache(cache_dir: Path, fingerprint: str, resume: bool) -> bool:
+    """Discard prior-run state unless an explicit compatible resume is requested."""
+
+    manifest_path = cache_dir / "render-cache.json"
+    if not cache_dir.exists():
+        return False
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        manifest = None
+    if resume and manifest is not None and manifest.get("fingerprint") == fingerprint:
+        return (cache_dir / "shards").is_dir()
+    reason = "starting a new run" if not resume else "training settings changed"
+    print(f"Discarding cache at {cache_dir}; {reason}")
+    shutil.rmtree(cache_dir)
+    return False
+
+
 def train(
     dataset: Path,
     output: Path,
@@ -62,6 +82,8 @@ def train(
     opacity_threshold: float = 0.005,
     split_n_samples: int = 2,
     split_shrink_factor: float = 0.8,
+    resume: bool = False,
+    headless: bool = False,
     preview: str | None = None,
 ) -> None:
     """Train the 3DGS baseline, ABCD, or the compositing ablation."""
@@ -116,6 +138,12 @@ def train(
     cache_fingerprint = hashlib.sha256(
         json.dumps(run_config, sort_keys=True).encode("utf-8")
     ).hexdigest()
+    cache_dir = output / "cache"
+    resume = (
+        _prepare_cache(cache_dir, cache_fingerprint, resume)
+        if method != "3dgs"
+        else False
+    )
     manifest = {
         **run_config,
         "git_revision": _git_revision(),
@@ -141,25 +169,38 @@ def train(
         "split_shrink_factor": split_shrink_factor,
     }
     input_model = GaussianModel.from_point_cloud(sparse)
-    with Logger(os.getpid(), str(output / "training.jsonl"), interval_ms=100):
-        if method == "3dgs":
-            output_model = basic_train(
-                input_model, training_views, BasicTrainConfig(**common)
-            )
-        else:
-            composition_enabled = method == "abcd"
-            config = GridTrainConfig(
-                **common,
-                grid_config=Grid(grid_size=partition_size),
-                sync_interval=sync_interval,
-                extra_cell_compensation=("last" if composition_enabled else "disabled"),
-                precomposite_enabled=composition_enabled,
-                precomposite_storage="cpu",
-                cache_dir=str(output / "cache"),
-                cache_fingerprint=cache_fingerprint,
-                resume=(output / "cache" / "shards").is_dir(),
-            )
-            output_model = grid_train(input_model, training_views, config)
+    viewer = None if headless else Viewer()
+    if viewer is not None:
+        for camera in training_views:
+            viewer.add_camera(camera)
+        print("Web viewer: http://localhost:8080")
+    try:
+        with Logger(os.getpid(), str(output / "training.jsonl"), interval_ms=100):
+            if method == "3dgs":
+                output_model = basic_train(
+                    input_model, training_views, BasicTrainConfig(**common), viewer
+                )
+            else:
+                composition_enabled = method == "abcd"
+                config = GridTrainConfig(
+                    **common,
+                    grid_config=Grid(grid_size=partition_size),
+                    sync_interval=sync_interval,
+                    extra_cell_compensation=(
+                        "last" if composition_enabled else "disabled"
+                    ),
+                    precomposite_enabled=composition_enabled,
+                    precomposite_storage="cpu",
+                    cache_dir=str(cache_dir),
+                    cache_fingerprint=cache_fingerprint,
+                    resume=resume,
+                )
+                output_model = grid_train(
+                    input_model, training_views, config, _viewer=viewer
+                )
+    finally:
+        if viewer is not None:
+            viewer.stop()
 
     output_model.save_ply(str(output / "model.ply"))
 

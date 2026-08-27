@@ -26,10 +26,6 @@ dependencies = [
     { name = "torchvision" },
     { name = "tqdm" },
     { name = "tyro" },
-]
-
-[package.optional-dependencies]
-viewer = [
     { name = "viser" },
 ]
 
@@ -57,9 +53,8 @@ requires-dist = [
     { name = "torchvision", specifier = "==0.18.1", index = "https://download.pytorch.org/whl/cu121" },
     { name = "tqdm", specifier = ">=4.66" },
     { name = "tyro", specifier = ">=1.0.13" },
-    { name = "viser", marker = "extra == 'viewer'", specifier = ">=0.1" },
+    { name = "viser", specifier = ">=0.1" },
 ]
-provides-extras = ["viewer"]
 
 [package.metadata.requires-dev]
 dev = [

@@ -9,6 +9,35 @@ Paper: [SIGGRAPH Posters 2026](https://doi.org/10.1145/3799825.3818779)
 
 ![ABCD training example](images/demo.gif)
 
+## See ABCD Live
+
+The most direct way to understand ABCD is to watch it train. This command opens
+two live views while it optimizes spatial partitions:
+
+```bash
+uv sync --frozen
+uv run python scripts/train.py \
+  --dataset datasets/garden \
+  --output results/garden-live \
+  --method abcd \
+  --partition-size 40 \
+  --iterations 5000 \
+  --preview 0
+
+# --dataset datasets/garden: input COLMAP scene.
+# --output results/garden-live: checkpoints, cache, logs, and final model.
+# --method abcd: train one spatial block at a time while the rest stays visible.
+# --partition-size 40: use roughly 11 large blocks for a legible garden demo.
+# --iterations 5000: give each block 5,000 image-matching updates.
+# --preview 0: keep the OpenCV window on camera 0 to compare changes over time.
+```
+
+Open <http://localhost:8080> in a browser. The web viewer shows the block being
+optimized, its boundary, all scene cameras and reference images, and a freely
+movable live render. The OpenCV window stays on one reference camera. Together
+they make the ABCD loop visible: the browser reveals which local block is being
+updated, while the OpenCV view shows how that update improves the full scene.
+
 ## Installation
 
 Requirements: Linux, Python 3.11, a CUDA-capable NVIDIA GPU compatible with
@@ -21,7 +50,7 @@ uv run python build_submodule.py submodules/diff-gaussian-rasterization
 uv run python build_submodule.py submodules/simple-knn
 ```
 
-The optional viewer is installed with `uv sync --frozen --extra viewer`.
+`uv sync` also installs the web viewer used during interactive training.
 
 ## Dataset
 
@@ -57,6 +86,14 @@ uv run abcd-train \
   --iterations 5000 \
   --sync-interval 250 \
   --seed 0
+
+# --dataset datasets/garden: input COLMAP scene.
+# --output results/garden-abcd: checkpoints, cache, logs, and final model.
+# --method abcd: train one spatial block at a time while the rest stays visible.
+# --partition-size 5: split the scene into cubes with five-unit edges.
+# --iterations 5000: give each block 5,000 image-matching updates.
+# --sync-interval 250: switch to another block after every 250 updates.
+# --seed 0: reproducible camera order and initialization.
 ```
 
 Supported methods are:
@@ -65,11 +102,24 @@ Supported methods are:
 - `abcd-no-compositing`: the partitioned ablation.
 - `3dgs`: the unpartitioned baseline.
 
-Runs are headless by default and write `run.json`, `training.jsonl`,
-`model.ply`, and an ABCD `cache/` directory. Cached RGB and alpha use `uint8`;
-depth uses `float16`. Cache and shard writes are atomic and checksum-verified.
+Runs write `run.json`, `training.jsonl`, `model.ply`, and an ABCD `cache/`
+directory. Cached RGB and alpha use `uint8`; depth uses `float16`. Cache and
+shard writes are atomic and checksum-verified.
 Interrupted ABCD runs resume from the shard and optimizer checkpoints when
-restarted with the same configuration.
+restarted with `--resume` and the same configuration. Every run otherwise
+discards the existing cache in its output directory before starting fresh.
+
+## Interactive Viewer
+
+Training starts a Viser server at <http://localhost:8080> by default. Open it
+in a browser while training to inspect the block being optimized, its
+highlighted boundary, all scene cameras, and the live renderer output.
+Move the browser camera independently while training continues; use the render
+channel control to switch between RGB, depth, and alpha.
+
+For a second, fixed training-camera render in an OpenCV window, add
+`--preview 0` or `--preview all`. Disable the browser viewer for batch runs
+with `--headless`.
 
 ## Evaluation
 
@@ -78,6 +128,10 @@ uv run abcd-evaluate \
   --model results/garden-abcd/model.ply \
   --dataset datasets/garden \
   --output results/garden-abcd/evaluation.csv
+
+# --model results/garden-abcd/model.ply: final PLY written by training.
+# --dataset datasets/garden: the same COLMAP scene used for training.
+# --output results/garden-abcd/evaluation.csv: per-view held-out metrics.
 ```
 
 Evaluation reports held-out per-view PSNR, SSIM, and LPIPS.
@@ -90,6 +144,9 @@ Run the paper configuration for all methods and scenes:
 uv run abcd-reproduce \
   --dataset-root datasets \
   --output results/siggraph_2026
+
+# --dataset-root datasets: directory containing garden and kitchen scenes.
+# --output results/siggraph_2026: method runs and comparison artifacts.
 ```
 
 The command reuses completed models and evaluations unless `--force` is given.
@@ -100,7 +157,12 @@ arguments such as `--iterations 10000` to override them.
 Equivalent runnable entrypoints live in `scripts/`, for example:
 
 ```bash
-uv run python scripts/reproduce.py --dataset-root datasets --output results/paper
+uv run python scripts/reproduce.py \
+  --dataset-root datasets \
+  --output results/paper
+
+# --dataset-root datasets: directory containing garden and kitchen scenes.
+# --output results/paper: method runs and comparison artifacts.
 ```
 
 ## Memory Model
@@ -122,6 +184,8 @@ Measure inactive-shard VRAM scaling with:
 
 ```bash
 uv run abcd-memory --output release_checks/memory.json
+
+# --output release_checks/memory.json: JSON trace of 1/2/4/8-partition VRAM.
 ```
 
 The command holds active-shard size fixed across 1, 2, 4, and 8 partitions and

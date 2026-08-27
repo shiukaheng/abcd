@@ -19,10 +19,8 @@ dependencies = [
     "torchvision==0.18.1",
     "tqdm>=4.66",
     "tyro>=1.0.13",
+    "viser>=0.1",
 ]
-
-[project.optional-dependencies]
-viewer = ["viser>=0.1"]
 
 [project.scripts]
 abcd-train = "abcd.train:main"
