@@ -42,7 +42,7 @@ include = ["abcd*"]
 "" = "src"
 
 [tool.uv]
-# Build submodules without isolation so torch is available during build
+# Build vendored CUDA extensions without isolation so torch is available.
 no-build-isolation = true
 
 [dependency-groups]

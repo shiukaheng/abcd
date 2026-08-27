@@ -16,8 +16,8 @@ pip3 install \
     lpips \
     pybind11 \
     viser
-pip3 install -e ./submodules/diff-gaussian-rasterization/
-pip3 install -e ./submodules/simple-knn/
+pip3 install -e ./vendor/diff-gaussian-rasterization/
+pip3 install -e ./vendor/simple-knn/
 
 USERNAME=$(whoami)
 sudo chown -R $USERNAME:$USERNAME /home/vscode/.cache/torch

@@ -2,7 +2,7 @@ __pycache__/
 *.py[cod]
 *.so
 *.egg-info/
-submodules/**/build/
+vendor/**/build/
 .venv/
 .pytest_cache/
 .ruff_cache/

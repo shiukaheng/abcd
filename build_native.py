@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Build script for CUDA submodules with compatibility patches."""
+"""Build a vendored CUDA extension with compatibility patches."""
 
 import os
 import site
@@ -19,11 +19,11 @@ try:
 except ImportError:
     pass
 
-# Now build the submodule
-submodule_path = Path(
-    sys.argv[1] if len(sys.argv) > 1 else "./submodules/diff-gaussian-rasterization"
+# Build the selected vendored extension.
+extension_path = Path(
+    sys.argv[1] if len(sys.argv) > 1 else "./vendor/diff-gaussian-rasterization"
 ).resolve()
-os.chdir(submodule_path)
+os.chdir(extension_path)
 
 result = subprocess.run(
     [sys.executable, "setup.py", "build_ext", "--inplace"],
@@ -35,6 +35,6 @@ if result.returncode == 0:
     existing = set()
     if path_file.exists():
         existing.update(path_file.read_text(encoding="utf-8").splitlines())
-    existing.add(str(submodule_path))
+    existing.add(str(extension_path))
     path_file.write_text("\n".join(sorted(existing)) + "\n", encoding="utf-8")
 sys.exit(result.returncode)

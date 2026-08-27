@@ -46,8 +46,8 @@ PyTorch 2.3.1/CUDA 12.1, NVCC, a C++ compiler, and
 
 ```bash
 uv sync --frozen
-uv run python build_submodule.py submodules/diff-gaussian-rasterization
-uv run python build_submodule.py submodules/simple-knn
+uv run python build_native.py vendor/diff-gaussian-rasterization
+uv run python build_native.py vendor/simple-knn
 ```
 
 `uv sync` also installs the web viewer used during interactive training.
@@ -209,8 +209,8 @@ fails when peak allocated VRAM spreads by 1 MiB or more.
 
 ```bash
 uv sync --frozen --group dev
-uv run ruff format --check src tests scripts build_submodule.py
-uv run ruff check src tests scripts build_submodule.py
+uv run ruff format --check src tests scripts build_native.py
+uv run ruff check src tests scripts build_native.py
 uv run pyright
 uv run pytest
 ```
@@ -228,13 +228,13 @@ uv run pytest
 Original ABCD code is released under the MIT License. Bundled GraphDECO
 rasterizer and simple-knn code have separate research and evaluation terms.
 
-`submodules/diff-gaussian-rasterization/` is derived from the Gaussian
+`vendor/diff-gaussian-rasterization/` is derived from the Gaussian
 Splatting software by Inria and MPII, with modifications based on Ashawkey's
 rasterizer. Its license at
-`submodules/diff-gaussian-rasterization/LICENSE.md` permits research and
+`vendor/diff-gaussian-rasterization/LICENSE.md` permits research and
 evaluation use and prohibits commercial use without prior permission.
 
-`submodules/simple-knn/` is derived from the GraphDECO Gaussian Splatting
+`vendor/simple-knn/` is derived from the GraphDECO Gaussian Splatting
 implementation by Inria and MPII. Its headers identify the same
 Gaussian-Splatting license, so this distribution treats it as research and
 evaluation only as well.
