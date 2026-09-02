@@ -5,8 +5,9 @@ spatial partition at a time. Inactive partitions are stored on disk; their
 cached renders provide the foreground and background context for the active
 partition.
 
-Paper: [SIGGRAPH Posters 2026](https://doi.org/10.1145/3799825.3818779)
-[Video](https://youtu.be/3jBalwElgFM)
+[[arXiv]](https://arxiv.org/html/2608.27735v1)
+[[SIGGRAPH Posters 2026]](https://doi.org/10.1145/3799825.3818779)
+[[Video]](https://youtu.be/3jBalwElgFM)
 
 ![ABCD training example](images/demo.gif)
 
